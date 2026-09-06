@@ -1,6 +1,6 @@
 # Pi Digital Employee Demo
 
-Phase 0 proves one thesis only: the same Pi Agent Core tool loop can run in Node.js and in a browser bundle without duplicating agent logic.
+Phase 1 keeps the Phase 0 portability proof while introducing a small runtime-neutral Employee Core. The operations assistant is data-driven and refers to capabilities such as `invoice.review`; a Pi adapter handles the Pi Agent Core boundary.
 
 ## Phase 0
 
@@ -30,6 +30,8 @@ Expected business result in both runtimes:
 - Outstanding total: SGD 14,520
 - Verification: PASS
 
-## Phase 0 boundary
+## Phase 1 boundary
 
-Not included yet: Employee Core, skills, capability registry, ERP integration, BYOK, IndexedDB persistence, approvals, scheduling, multi-agent, or production credentials.
+Included: Employee Core contracts, capability registry, minimal task state transitions, operations-assistant definition, and Node/browser regression coverage.
+
+Not included: ERP integration, BYOK, IndexedDB persistence, approvals, scheduling, multi-agent, email sending, memory, or production credentials.

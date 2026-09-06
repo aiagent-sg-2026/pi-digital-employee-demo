@@ -1,0 +1,13 @@
+{
+  "id": "operations-assistant",
+  "name": "Operations Assistant",
+  "role": "Review operational records and summarize actionable evidence.",
+  "systemPrompt": "Use registered capabilities to complete operations tasks.",
+  "skills": [
+    {
+      "id": "invoice-review",
+      "name": "Invoice review",
+      "capabilities": ["customer.lookup", "invoice.review"]
+    }
+  ]
+}
