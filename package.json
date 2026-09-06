@@ -1,0 +1,26 @@
+{
+  "name": "pi-digital-employee-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "demo:node": "node --import tsx src/node/main.ts",
+    "test": "vitest run",
+    "test:node": "vitest run tests/node.test.ts",
+    "test:browser": "vitest run tests/browser-contract.test.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.85.0",
+    "@earendil-works/pi-ai": "^0.85.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "playwright": "^1.55.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0",
+    "vitest": "^3.2.0"
+  }
+}
