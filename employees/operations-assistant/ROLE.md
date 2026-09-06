@@ -1,3 +1,3 @@
 # Role
 
-Review customer and invoice records and produce verifiable operational evidence.
+Review customer, invoice, payment, and follow-up-policy records and produce verifiable operational evidence.

@@ -1,6 +1,6 @@
 # Pi Digital Employee Demo
 
-Phase 1 keeps the Phase 0 portability proof while introducing a small runtime-neutral Employee Core. The operations assistant is data-driven and refers to capabilities such as `invoice.review`; a Pi adapter handles the Pi Agent Core boundary.
+Phase 2 keeps the Phase 0/1 portability proof and adds a deterministic, runtime-neutral mock business API. The Operations Assistant reaches customer, invoice, payment, and follow-up behavior through registered capabilities; a Pi adapter continues to own the Pi Agent Core boundary.
 
 ## Phase 0
 
@@ -30,8 +30,12 @@ Expected business result in both runtimes:
 - Outstanding total: SGD 14,520
 - Verification: PASS
 
-## Phase 1 boundary
+## Phase 2
 
-Included: Employee Core contracts, capability registry, minimal task state transitions, operations-assistant definition, and Node/browser regression coverage.
+`createMockBusinessApi()` exposes a fixed, validated dataset with paid, outstanding, overdue, future-due, partial-payment, credit-note, and duplicate-record scenarios. `createOperationsRuntime()` registers `customer.lookup`, `invoice.review`, `payment.list`, and `follow-up.evaluate` identically for Node and browsers. The fixed review date keeps results repeatable: ACME has three outstanding invoices totaling SGD 14,520 after canonical payments and credits are applied.
+
+## Phase 2 boundary
+
+Included: the Phase 0/1 behavior, Employee Core contracts, capability registry, mock business data/API, deterministic follow-up policies, operations-assistant definition, and Node/browser regression coverage.
 
 Not included: ERP integration, BYOK, IndexedDB persistence, approvals, scheduling, multi-agent, email sending, memory, or production credentials.

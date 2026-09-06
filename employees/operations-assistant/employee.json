@@ -8,6 +8,11 @@
       "id": "invoice-review",
       "name": "Invoice review",
       "capabilities": ["customer.lookup", "invoice.review"]
+    },
+    {
+      "id": "receivables-follow-up",
+      "name": "Receivables follow-up",
+      "capabilities": ["payment.list", "follow-up.evaluate"]
     }
   ]
 }

@@ -1,3 +1,3 @@
 # Verification
 
-Verify customer identity, invoice count, amount, and currency before completion.
+Verify customer identity, canonical invoice count, payment and credit application, duplicate suppression, amount, and currency before completion.
