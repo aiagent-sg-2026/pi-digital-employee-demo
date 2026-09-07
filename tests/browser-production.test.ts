@@ -17,4 +17,23 @@ describe("Browser production demo contract", () => {
     expect(main).toContain("gateway.chat");
     expect(main.indexOf('result.task.state === "COMPLETED"')).toBeLessThan(main.indexOf("gateway.chat"));
   });
+
+  it("ships production UX affordances for reviewers and technical audit", () => {
+    const html = readFileSync("index.html", "utf8");
+    const main = readFileSync("src/browser/main.ts", "utf8");
+    expect(html).toContain("Quick cases");
+    expect(html).toContain('id="verification-count"');
+    expect(html).toContain('id="copy-evidence"');
+    expect(html).toContain("Deterministic completion gate");
+    expect(main).toContain("capabilityLabels");
+    expect(main).toContain("renderSafeMarkdown");
+    expect(main).toContain("navigator.clipboard.writeText");
+  });
+
+  it("prevents overlapping employee runs", () => {
+    const main = readFileSync("src/browser/main.ts", "utf8");
+    expect(main).toContain("let running = false");
+    expect(main).toContain("if (running) return");
+    expect(main).toContain("button.disabled = true");
+  });
 });
