@@ -326,22 +326,24 @@ async function applyRoute(route:AppRoute){
   const epoch=++routeEpoch,isCurrent=()=>epoch===routeEpoch;
   currentRoute=route;document.body.className=document.body.className.replace(/\broute-[a-z-]+\b/g,"").trim();document.body.classList.add(`route-${route.name}`);
   document.querySelectorAll<HTMLElement>("[data-pages]").forEach(element=>{const pages=(element.dataset.pages??"").split(/\s+/);element.hidden=!pages.includes(route.name);});
-  const parent=navParent(route);document.querySelectorAll<HTMLElement>("[data-nav-route]").forEach(element=>{const active=element.dataset.navRoute===parent;element.classList.toggle("active",active);if(active)element.setAttribute("aria-current","page");else element.removeAttribute("aria-current");});closeDrawer();
+  const parent=navParent(route);document.querySelectorAll<HTMLElement>("[data-nav-route]").forEach(element=>{const active=element.dataset.navRoute===parent;element.classList.toggle("active",active);if(active)element.setAttribute("aria-current","page");else element.removeAttribute("aria-current");});closeDrawer(false);
   const titleFor=(key:string)=>`${t(key)} · Alex`;
+  let detailHeading:{selector:string;text:string}|undefined;
   if(route.name==="home"){document.title=titleFor("nav.home");if(tasks[0])await renderTaskDetail(tasks[0].id);else resetWorkspace(false,false);if(!isCurrent())return;}
   if(route.name==="work"){document.title=titleFor("nav.work");workStatusFilter.value=route.query.get("status")??"";await renderWorkCustomerFilter();if(!isCurrent())return;renderWork();}
   if(route.name==="inbox"){document.title=titleFor("nav.inbox");inboxStatusFilter.value=route.query.get("status")??"";inboxSeverityFilter.value=route.query.get("severity")??"";inboxTypeFilter.value=route.query.get("type")??"";await renderInbox();if(!isCurrent())return;}
   if(route.name==="customers"){document.title=titleFor("nav.customers");const q=route.query.get("q")??"";customerSearch.value=q;await renderCustomers(q);if(!isCurrent())return;customerDetail.innerHTML=`<p class="approval-empty">${esc(t("customers.selectHelp"))}</p>`;document.querySelector("#customers-view h2")!.textContent=t("customers.title");}
-  if(route.name==="customer"){const customer=await business.getCustomer(route.params.customerId!);if(!isCurrent())return;if(customer){await showCustomer(customer.id);if(!isCurrent())return;document.querySelector("#customers-view h2")!.textContent=customer.name;document.title=`${customer.name} · ${t("nav.customers")}`;}else{customerDetail.innerHTML=`<div class="result-notice failed"><strong>${esc(t("customers.notFound"))}</strong></div>`;document.title=`${t("customers.notFound")} · ${t("nav.customers")}`;}}
+  if(route.name==="customer"){const customer=await business.getCustomer(route.params.customerId!);if(!isCurrent())return;if(customer){await showCustomer(customer.id);if(!isCurrent())return;document.querySelector("#customers-view h2")!.textContent=customer.name;detailHeading={selector:"#customers-view h2",text:customer.name};document.title=`${customer.name} · ${t("nav.customers")}`;}else{customerDetail.innerHTML=`<div class="result-notice failed"><strong>${esc(t("customers.notFound"))}</strong></div>`;document.title=`${t("customers.notFound")} · ${t("nav.customers")}`;}}
   if(route.name==="history"){document.title=titleFor("nav.history");await renderHistory();if(!isCurrent())return;}
   if(route.name==="approvals"){document.title=titleFor("nav.approvals");renderApprovals();}
-  if(route.name==="approval"){document.title=`${t("approvals.detail")} · Alex`;const approvalTitle=await renderApprovalDetailPage(route.params.approvalId!);if(!isCurrent())return;document.title=`${approvalTitle} · ${t("nav.approvals")}`;}
-  if(route.name==="task"){document.title=`${t("task.latest")} · Alex`;const task=await work.getTask(route.params.taskId!);if(!isCurrent())return;if(task){await renderTaskDetail(task.id);if(!isCurrent())return;const heading=document.querySelector<HTMLElement>("#task-detail h2");if(heading)heading.textContent=task.title;document.title=`${task.title} · Alex`;}else{businessResult.innerHTML=`<div class="result-notice failed"><strong>${esc(t("task.notFound"))}</strong><p>${esc(t("task.notFoundHelp"))}</p></div>`;document.title=`${t("task.notFound")} · Alex`;}}
+  if(route.name==="approval"){document.title=`${t("approvals.detail")} · Alex`;const approvalTitle=await renderApprovalDetailPage(route.params.approvalId!);if(!isCurrent())return;detailHeading={selector:"#approval-detail-page h2",text:approvalTitle};document.title=`${approvalTitle} · ${t("nav.approvals")}`;}
+  if(route.name==="task"){document.title=`${t("task.latest")} · Alex`;const task=await work.getTask(route.params.taskId!);if(!isCurrent())return;if(task){await renderTaskDetail(task.id);if(!isCurrent())return;const heading=document.querySelector<HTMLElement>("#task-detail h2");if(heading)heading.textContent=task.title;detailHeading={selector:"#task-detail h2",text:task.title};document.title=`${task.title} · Alex`;}else{businessResult.innerHTML=`<div class="result-notice failed"><strong>${esc(t("task.notFound"))}</strong><p>${esc(t("task.notFoundHelp"))}</p></div>`;document.title=`${t("task.notFound")} · Alex`;}}
   if(route.name==="capabilities"){renderCapabilitiesPage();document.title=titleFor("nav.capabilities");}
   if(route.name==="connections"){renderConnectionsPage();document.title=titleFor("nav.connections");}
   if(route.name==="settings"){languageSelect.value=getLocale();settingsAppVersion.textContent=document.querySelector("#app-version")?.textContent??t("common.versionLoading");document.title=titleFor("nav.settings");}
   if(!isCurrent())return;
   applyDomTranslations();
+  if(detailHeading){const heading=document.querySelector<HTMLElement>(detailHeading.selector);if(heading)heading.textContent=detailHeading.text;}
   if(lastFocusedPath!==route.path){lastFocusedPath=route.path;if(routeFocusInitialized){requestAnimationFrame(()=>{const heading=document.querySelector<HTMLElement>("#main-content [data-pages]:not([hidden]) h1, #main-content [data-pages]:not([hidden]) h2");if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});window.scrollTo({top:0,behavior:"instant" as ScrollBehavior});}});}else routeFocusInitialized=true;}
 }
 
@@ -409,7 +411,7 @@ async function actOnInbox(id:string,action:string){
 }
 async function assign(){if(running)return;const title=taskInput.value.trim();if(!title){composerFeedback.textContent=t("feedback.enterTask");return;}composerFeedback.textContent="";const canonical=pendingSuggestion&&title===pendingSuggestion.display?pendingSuggestion.canonical:title;const routed=routeDashboardTask(canonical);pendingSuggestion=null;if(routed.intent==="unsupported"){await createBlocked(title,routed.reason??"Unsupported capability");return;}if(routed.intent==="approval-demo"){await createApprovalScenario(title,routed.customerQuery??"ACME");return;}await executeRouted(title,routed.intent,routed.customerQuery);}
 function openDrawer(){trustDrawer.classList.add("open");drawerOverlay.classList.add("open");closeTrustDrawerButton.focus();}
-function closeDrawer(){trustDrawer.classList.remove("open");drawerOverlay.classList.remove("open");openTrustDrawerButton.focus();}
+function closeDrawer(restoreFocus=true){trustDrawer.classList.remove("open");drawerOverlay.classList.remove("open");if(restoreFocus)openTrustDrawerButton.focus();}
 async function refreshAfterReset(message:string){await renderAll();resetWorkspace(true,false);composerFeedback.textContent=message;}
 
 function bindEvents(){
@@ -440,7 +442,7 @@ function bindEvents(){
   $("#reset-entire-demo").addEventListener("click",()=>{if(confirm(t("settings.resetConfirm")))void resetEntireDemo().then(()=>refreshAfterReset(t("settings.resetDone")));});
   $("#copy-evidence").addEventListener("click",()=>void navigator.clipboard.writeText(latestEvidence));
   $("#view-evidence").addEventListener("click",()=>{const taskId=currentRoute.name==="task"?currentRoute.params.taskId:tasks[0]?.id;if(taskId)navigate(`/tasks/${taskId}`,{tab:"evidence"});else{evidenceDetails.open=true;if(matchMedia("(max-width:760px)").matches)openDrawer();}});
-  openTrustDrawerButton.addEventListener("click",openDrawer);closeTrustDrawerButton.addEventListener("click",closeDrawer);drawerOverlay.addEventListener("click",closeDrawer);
+  openTrustDrawerButton.addEventListener("click",openDrawer);closeTrustDrawerButton.addEventListener("click",()=>closeDrawer());drawerOverlay.addEventListener("click",()=>closeDrawer());
   document.addEventListener("keydown",event=>{if(event.key==="Escape"&&trustDrawer.classList.contains("open"))closeDrawer();});
   languageSelect.value=getLocale();
   languageSelect.addEventListener("change",()=>void setLocale(languageSelect.value as SupportedLocale));

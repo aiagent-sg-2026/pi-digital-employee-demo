@@ -17,6 +17,7 @@ describe("i18n registry",()=>{
   it("translates UI labels without translating business identity",()=>{expect(tFor("zh-CN","nav.home")).toBe("首页");expect(tFor("zh-TW","nav.home")).toBe("首頁");expect(tFor("zh-CN","common.alex")).toBe("Alex");expect(tFor("zh-TW","connections.erp")).toBe("Globe3 ERP");});
   it("uses one locale for money/date/date-time/time formatting",async()=>{await setLocale("zh-CN",{persist:false});expect(formatMoney(14520)).toContain("SGD");expect(formatDate("2025-03-01")).toContain("2025");expect(formatDateTime("2026-09-07T04:30:00Z")).toContain("2026");expect(formatTime("2026-09-07T04:30:00Z")).toMatch(/12[:：]30/);await setLocale("en",{persist:false});expect(t("nav.home")).toBe("Home");expect(formatDate("2025-03-01")).toContain("2025");});
   it("persists manual language choice in the normalized preferences store",async()=>{await setLocale("zh-TW");const pref=await getRecord<{id:string;value:string}>(STORES.preferences,"ui-language");expect(pref?.value).toBe("zh-TW");});
+  it("uses polished Traditional Chinese product copy",()=>{expect(zhTW["settings.about"]).toBe("關於");expect(zhTW["common.severity.critical"]).toBe("嚴重");});
 });
 
 

@@ -45,4 +45,9 @@ describe("presentation polish contract",()=>{
   it("keeps all newly introduced presentation icons SVG-based",()=>{
     for(const icon of ['globe','download','database','info'])expect(icons).toContain(`${icon}:`);
   });
+  it("keeps route focus stable and plain mobile links touch-safe",()=>{
+    expect(controller).toContain('closeDrawer(false)');
+    expect(controller).toContain('function closeDrawer(restoreFocus=true)');
+    expect(html).toContain('a.link-btn{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px}');
+  });
 });
