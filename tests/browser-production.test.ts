@@ -6,6 +6,7 @@ const main = readFileSync("src/browser/main.ts", "utf8");
 const workflow = readFileSync("src/core/employee-workflow.ts", "utf8");
 const data = readFileSync("src/core/mock-business-data.ts", "utf8");
 const icons = readFileSync("src/browser/icons.ts", "utf8");
+  const ledger = readFileSync("src/browser/demo-ledger.ts", "utf8");
 const router = readFileSync("src/browser/task-router.ts", "utf8");
 
 describe("Digital Employee Dashboard V1 production contract", () => {
@@ -77,13 +78,22 @@ describe("Digital Employee Dashboard V1 production contract", () => {
     expect(main).toContain("No ERP, email, credit limit, or external business data will be changed.");
   });
 
-  it("persists demo task history but deduplicates outstanding KPI by customer snapshot", () => {
-    expect(main).toContain('const STORAGE_KEY = "digital-employee-dashboard-v1-ledger"');
-    expect(main).toContain("localStorage.setItem(STORAGE_KEY");
-    expect(main).toContain("localStorage.getItem(STORAGE_KEY)");
+  it("persists demo task history in IndexedDB and deduplicates outstanding KPI by customer snapshot", () => {
+    const ledger = readFileSync("src/browser/demo-ledger.ts", "utf8");
+    expect(ledger).toContain('DEMO_LEDGER_DB_NAME = "digital-employee-dashboard-v1"');
+    expect(ledger).toContain('DEMO_LEDGER_STORE = "dashboard-state"');
+    expect(ledger).toContain("indexedDB.open(DEMO_LEDGER_DB_NAME");
+    expect(ledger).toContain("writeDemoLedger");
+    expect(ledger).toContain("readDemoLedger");
+    expect(ledger).toContain("migrateLegacyLocalStorageLedger");
+    expect(main).toContain("writeDemoLedger(ledger)");
+    expect(main).toContain("await readDemoLedger<Partial<Ledger>>()");
+    expect(main).not.toContain("localStorage.setItem(");
+    expect(main).not.toContain("localStorage.getItem(");
     expect(main).toContain('reviewed.set(`${summary.customerId}:${MOCK_AS_OF_DATE}`, summary.outstandingTotal)');
     expect(html).toContain("Demo ledger");
     expect(html).toContain("Unique snapshot");
+    expect(html).toContain("Task ledger: IndexedDB");
   });
 
   it("labels the fixed demo snapshot explicitly", () => {

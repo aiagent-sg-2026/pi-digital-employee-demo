@@ -2,6 +2,7 @@ import { MOCK_AS_OF_DATE, runOperationsEmployeeTask } from "../core";
 import { createDemoGatewayClient, DemoGatewayError, DemoGatewayRateLimitError } from "../shared/demo-gateway-client";
 import { hydrateSvgIcons, svgIcon } from "./icons";
 import { routeDashboardTask, type RoutedTask, type TaskIntent } from "./task-router";
+import { clearDemoLedger, migrateLegacyLocalStorageLedger, readDemoLedger, writeDemoLedger } from "./demo-ledger";
 
 type WorkflowResult = Awaited<ReturnType<typeof runOperationsEmployeeTask>>;
 type WorkStatus = "Running" | "Completed" | "Needs Review" | "Needs Approval" | "Failed" | "Blocked";
@@ -35,7 +36,6 @@ interface ApprovalItem {
 interface Ledger { version: 1; work: WorkItem[]; inbox: InboxItem[]; approvals: ApprovalItem[]; }
 
 
-const STORAGE_KEY = "digital-employee-dashboard-v1-ledger";
 
 const form = document.querySelector<HTMLFormElement>("#task-form")!;
 const taskInput = document.querySelector<HTMLInputElement>("#task-input")!;
@@ -143,21 +143,28 @@ function statusClass(status: WorkStatus): string {
   return "running";
 }
 
-function saveLedger(): void {
-  const ledger: Ledger = { version: 1, work, inbox, approvals };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(ledger));
+let ledgerWriteQueue = Promise.resolve();
+function snapshotLedger(): Ledger {
+  return structuredClone({ version: 1, work, inbox, approvals } satisfies Ledger);
 }
-function loadLedger(): void {
+function saveLedger(): void {
+  const ledger = snapshotLedger();
+  ledgerWriteQueue = ledgerWriteQueue
+    .then(() => writeDemoLedger(ledger))
+    .catch((error) => {
+      console.error("Demo IndexedDB ledger save failed", error);
+    });
+}
+async function loadLedger(): Promise<void> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const ledger = JSON.parse(raw) as Partial<Ledger>;
-    if (ledger.version !== 1) return;
+    await migrateLegacyLocalStorageLedger<Ledger>();
+    const ledger = await readDemoLedger<Partial<Ledger>>();
+    if (!ledger || ledger.version !== 1) return;
     if (Array.isArray(ledger.work)) work.push(...ledger.work);
     if (Array.isArray(ledger.inbox)) inbox.push(...ledger.inbox);
     if (Array.isArray(ledger.approvals)) approvals.push(...ledger.approvals);
-  } catch {
-    localStorage.removeItem(STORAGE_KEY);
+  } catch (error) {
+    console.error("Demo IndexedDB ledger load failed; continuing in memory only", error);
   }
 }
 
@@ -560,11 +567,11 @@ function closeTrustDrawer(): void {
   drawerOverlay.classList.remove("open");
   openTrustDrawerButton.focus();
 }
-function clearDemoHistory(): void {
+async function clearDemoHistory(): Promise<void> {
   work.splice(0);
   inbox.splice(0);
   approvals.splice(0);
-  localStorage.removeItem(STORAGE_KEY);
+  await clearDemoLedger();
   renderDashboard();
   resetTaskWorkspace(true);
 }
@@ -603,7 +610,7 @@ viewEvidence.addEventListener("click", () => {
 });
 document.querySelector("#new-task")?.addEventListener("click", () => resetTaskWorkspace(true));
 document.querySelector("#open-inbox")?.addEventListener("click", () => document.querySelector("#inbox")?.scrollIntoView({ behavior: "smooth" }));
-clearHistoryButton.addEventListener("click", () => clearDemoHistory());
+clearHistoryButton.addEventListener("click", () => { void clearDemoHistory(); });
 openTrustDrawerButton.addEventListener("click", openTrustDrawer);
 closeTrustDrawerButton.addEventListener("click", closeTrustDrawer);
 drawerOverlay.addEventListener("click", closeTrustDrawer);
@@ -616,6 +623,9 @@ document.querySelectorAll<HTMLAnchorElement>(".mobile-bottom-nav a").forEach((li
 const snapshotLabel = `Demo dataset · Snapshot ${formatSnapshot()} · Read-only fixture`;
 datasetSnapshot.textContent = snapshotLabel;
 businessDataDetail.textContent = `Deterministic fixture · Snapshot ${formatSnapshot()}`;
-loadLedger();
-renderDashboard();
-resetTaskWorkspace(false, false);
+async function initializeDashboard(): Promise<void> {
+  await loadLedger();
+  renderDashboard();
+  resetTaskWorkspace(false, false);
+}
+void initializeDashboard();

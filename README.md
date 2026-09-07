@@ -38,7 +38,7 @@ Expected business result in both runtimes:
 
 Included: the Phase 0/1 behavior, Employee Core contracts, capability registry, mock business data/API, deterministic follow-up policies, operations-assistant definition, and Node/browser regression coverage.
 
-Not included: ERP integration, BYOK, IndexedDB persistence, approvals, scheduling, multi-agent, email sending, memory, or production credentials.
+Not included: ERP integration, BYOK, server-side durable persistence, production approvals, scheduling, multi-agent, email sending, long-term employee memory, or production credentials.
 
 
 ## Phase 3
@@ -97,7 +97,7 @@ The public dashboard is deliberately work-first and user-triggered:
 
 ### Demo ledger and KPI semantics
 
-Task history is persisted in browser `localStorage` under a versioned demo ledger so reloads preserve work history. The Demo Gateway bearer token remains memory-only and is never written to storage. The dashboard provides a Clear demo history action.
+Task history is persisted in browser IndexedDB under a versioned demo ledger so reloads preserve work history without treating localStorage as the durable store. Existing V1 localStorage ledger data is migrated once into IndexedDB and the legacy key is then removed. The Demo Gateway bearer token remains memory-only and is never written to IndexedDB or localStorage. The dashboard provides a Clear demo history action.
 
 KPI semantics are intentional:
 
