@@ -411,3 +411,24 @@ The service worker never caches cross-origin requests, non-GET requests, Demo Ga
 Updates are intentionally user-controlled. A new deploy installs as a waiting service worker. The dashboard surfaces `Update available` with the target `v<version> · <build>` and an **Update Now** action. Only Update Now sends `SKIP_WAITING`; after `controllerchange` the page reloads onto the new shell. The app checks for updates on focus, when returning to a visible tab, and every 30 minutes.
 
 A supported browser may also expose the custom `Install App` action through `beforeinstallprompt`. Chromium installability is validated against the generated manifest; offline reload is covered by browser E2E.
+
+## Product information architecture and hash routing
+
+The static GitHub Pages app uses a small Vanilla TypeScript hash router rather than pretending one long document is a set of pages. GitHub Pages therefore remains direct-link safe without a server rewrite rule.
+
+Primary routes:
+
+- `#/home` — dashboard overview, composer, KPI, business snapshot and previews.
+- `#/work` — operational task queue with status/customer filtering.
+- `#/inbox` — full actionable Inbox with URL filters.
+- `#/customers` and `#/customers/:customerId` — customer workspace and deep-linked account detail.
+- `#/history` — terminal/audit work only.
+- `#/approvals` and `#/approvals/:approvalId` — manager decision queue and detail.
+- `#/tasks/:taskId?tab=...` — Result / Timeline / Verification / Evidence / Related Issues / Related Approval.
+- `#/capabilities` — supported Digital Employee capabilities and verification boundaries.
+- `#/connections` — real/demo/not-connected runtime boundaries.
+- `#/settings` — language, PWA/app information and destructive demo-data controls.
+
+Sidebar/mobile navigation uses route-aware active state and `aria-current="page"`. Browser Back/Forward follows the same source of truth. Detail routes hydrate IndexedDB before rendering and never rerun a business task or call the Demo Gateway merely because a URL was refreshed.
+
+Customer actions preserve navigation semantics: **View exceptions** routes to the filtered Inbox and **View related tasks** routes to filtered My Work. Review/prepare actions remain explicit composer suggestions and never auto-run.
