@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Alex · Digital Employee",
   "short_name": "Digital Employee",
-  "description": "Browser-first Digital Employee workspace with local business data, verified work, approvals, history and evidence.",
+  "description": "Browser-first Digital Employee for verified business work, human decisions, deterministic verification, evidence and a local IndexedDB Demo Business World.",
   "lang": "en",
   "dir": "ltr",
   "start_url": "./",
