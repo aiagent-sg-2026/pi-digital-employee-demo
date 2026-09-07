@@ -32,11 +32,12 @@ export function navParent(route:AppRoute):RouteName{
 }
 
 export interface RouterOptions { onRoute:(route:AppRoute)=>void|Promise<void>; }
+export interface RouterStartOptions { initialApply?:boolean; }
 export function createHashRouter(options:RouterOptions){
   let started=false;
   const apply=()=>void options.onRoute(parseHash());
   return{
-    start(){if(started)return;started=true;window.addEventListener("hashchange",apply);if(!window.location.hash)history.replaceState(null,"",`${location.pathname}${location.search}#/home`);apply();},
+    start({initialApply=true}:RouterStartOptions={}){if(started)return;started=true;window.addEventListener("hashchange",apply);if(!window.location.hash)history.replaceState(null,"",`${location.pathname}${location.search}#/home`);if(initialApply)apply();},
     stop(){if(!started)return;started=false;window.removeEventListener("hashchange",apply);},
     refresh:apply,
   };

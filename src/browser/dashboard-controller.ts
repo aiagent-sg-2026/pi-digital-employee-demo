@@ -2,7 +2,7 @@ import { DEMO_COMPANY_NAME, DEMO_SNAPSHOT_DATE } from "../demo/seed";
 import { IndexedDbBusinessRepository } from "../data/business-repository";
 import { IndexedDbWorkRepository } from "../data/work-repository";
 import { clearTaskHistory, initializeBusinessWorld, resetEntireDemo, restoreSampleBusinessData } from "../data/indexeddb";
-import type { BusinessApproval, BusinessInboxItem, BusinessTask } from "../data/models";
+import type { BusinessApproval, BusinessInboxItem, BusinessTask, TaskEvent } from "../data/models";
 import { approveLocalDemo, createLocalDemoApproval, rejectLocalDemo } from "../core/demo-approval";
 import { resolveAmbiguousCustomerReview, reviewCustomer, runBusinessWorldTask, type BusinessWorldResult } from "../core/business-world-workflow";
 import { acknowledgeInvoiceDispute, dismissUnmatchedPaymentLocally, escalateInboxIssue, mapUnmatchedPaymentLocally, requestManagerApprovalForIssue, suppressDuplicatePaymentLocally } from "../core/inbox-resolution";
@@ -13,6 +13,8 @@ import { svgIcon } from "./icons";
 import { presentInboxIssue } from "./issue-presenter";
 import { applyDomTranslations, formatDate, formatDateTime, formatMoney, formatTime, getLocale, localeLanguageName, onLocaleChange, setLocale, t, type SupportedLocale } from "../i18n";
 import { createHashRouter, navigate, navParent, parseHash, routeHref, type AppRoute } from "./router";
+import { getAppState } from "./app-state";
+import { waitForDemoTestDelay } from "./test-delays";
 
 const $=<T extends Element>(selector:string)=>document.querySelector<T>(selector)!;
 const form=$<HTMLFormElement>("#task-form"), taskInput=$<HTMLInputElement>("#task-input"), assignButton=$<HTMLButtonElement>("#assign-task");
@@ -35,7 +37,7 @@ const approvalDetail=$<HTMLElement>("#approval-detail"), capabilitiesGrid=$<HTML
 const settingsAppVersion=$<HTMLElement>("#settings-app-version"), languageSelect=$<HTMLSelectElement>("#language-select"), taskTrustSummary=$<HTMLElement>("#task-trust-summary");
 
 const business=new IndexedDbBusinessRepository(); const work=new IndexedDbWorkRepository(); const gateway=createDemoGatewayClient({origin:window.location.origin});
-let running=false; let latestEvidence=""; let tasks:BusinessTask[]=[]; let inbox:BusinessInboxItem[]=[]; let approvals:BusinessApproval[]=[]; let currentRoute:AppRoute=parseHash("#/home"); let pendingSuggestion:{canonical:string;display:string}|null=null;
+let running=false; let routing=false; const mutationKeys=new Set<string>(); const pendingManagerSummaries=new Set<string>(); let latestEvidence=""; let tasks:BusinessTask[]=[]; let inbox:BusinessInboxItem[]=[]; let approvals:BusinessApproval[]=[]; let currentRoute:AppRoute=parseHash("#/home"); let pendingSuggestion:{canonical:string;display:string}|null=null;
 const esc=(v:unknown)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]!));
 const TASK_SUGGESTION_KEYS:Record<string,string>={
   "Review ACME overdue invoices and prepare follow-up actions.":"scenario.quickOverdue",
@@ -73,6 +75,10 @@ const verificationLabel=(id:string)=>{const key=`verification.check.${id}`;const
 const activityLabel=(type:string,message:string)=>{const key=`task.event.${type}`;const value=t(key);return value===key?message:value;};
 const verificationMessage=(check:any,task:BusinessTask)=>{if(!check?.message)return"";if(check.id==="customer.identity.unique"&&!check.passed){const query=task.review?.query??task.customerQuery??"";return task.review?.candidateCustomerIds?.length?t("task.multipleMatch",{query}):t("task.noMatch",{query});}return"";};
 const verificationCheckHtml=(check:any,task:BusinessTask)=>{const message=verificationMessage(check,task);return`<li data-pass="${!!check.passed}"><span class="check-icon">${svgIcon(check.passed?"check":"x")}</span><div><strong>${esc(verificationLabel(check.id))}</strong><small class="technical-id">${esc(check.id)}</small>${message?`<div>${esc(message)}</div>`:""}</div></li>`;};
+function renderCurrentActivityFromEvents(events:TaskEvent[]){currentActivity.innerHTML=projectTaskActivity(events).map(event=>`<li><span class="activity-icon ${event.type==="COMPLETED"?"done":event.type==="FAILED"?"idle":"active"}">${svgIcon(event.type==="COMPLETED"?"check":event.type==="FAILED"?"x":"circle-dot")}</span><div class="activity-copy"><strong>${esc(activityLabel(event.type,event.message))}</strong><small>${esc(event.type)} · ${formatTime(event.occurredAt)}</small></div></li>`).join("")||`<li><span class="activity-icon active">${svgIcon("circle-dot")}</span><div class="activity-copy"><strong>${esc(t("loading.working"))}</strong></div></li>`;}
+function setAssignmentControls(disabled:boolean){assignButton.disabled=disabled;suggestionButtons.forEach(button=>button.disabled=disabled);}
+function focusCurrentRouteHeading(){requestAnimationFrame(()=>{const heading=document.querySelector<HTMLElement>("#main-content [data-pages]:not([hidden]) h1, #main-content [data-pages]:not([hidden]) h2");heading?.focus({preventScroll:true});});}
+async function runUiMutation(key:string,source:HTMLElement,labelKey:string,action:()=>Promise<void>){if(mutationKeys.has(key))return;mutationKeys.add(key);const root=source.closest<HTMLElement>(".candidate-grid,.approval-scenario,.inbox-item-card")??source.parentElement;const controls=[...(root?.querySelectorAll<HTMLButtonElement|HTMLSelectElement|HTMLInputElement>("button,select,input")??[])];controls.forEach(control=>control.disabled=true);root?.setAttribute("aria-busy","true");const status=document.createElement("span");status.className="mutation-status";status.setAttribute("role","status");status.textContent=t(labelKey);root?.append(status);try{await waitForDemoTestDelay("mutation");await action();}finally{mutationKeys.delete(key);if(root?.isConnected){root.removeAttribute("aria-busy");status.remove();controls.forEach(control=>control.disabled=false);}}}
 function setEmployeeMode(mode:string){const key=mode==="Working"?"common.working":mode==="Waiting on manager"?"common.waitingManager":"common.available";employeeMode.textContent=t(key);lastUpdated.textContent=formatTime(new Date());}
 function setDetail(task?:BusinessTask){if(!task){detailState.textContent=t("outcome.ready");detailState.className="status-chip running";return;}detailState.textContent=outcomeLabel(task);detailState.className=`status-chip ${taskOutcomeClass(task)}`;}
 function resetWorkspace(clearComposer=true,focus=clearComposer){if(clearComposer){taskInput.value="";pendingSuggestion=null;}composerFeedback.textContent="";setDetail();businessMeta.textContent=t("task.noVerified");businessResult.innerHTML=`<p class="approval-empty">${esc(t("task.assignForResult"))}</p>`;verificationCount.textContent="0 / 0";verificationList.innerHTML=`<li><span class="check-icon">${svgIcon("circle")}</span><div>${esc(t("verification.waiting"))}</div></li>`;rawEvidence.textContent="";latestEvidence="";evidenceDetails.open=false;taskTrustSummary.hidden=true;taskTrustSummary.innerHTML="";aiSummary.textContent=t("task.summaryAfterVerify");gatewayStatus.textContent=t("task.gatewayNotCalled");currentActivity.innerHTML=`<li><span class="activity-icon idle">${svgIcon("circle")}</span><div class="activity-copy"><strong>${esc(t("rail.waitingWork"))}</strong><small>${esc(t("rail.assignTask"))}</small></div></li>`;setEmployeeMode("Available");if(focus)taskInput.focus();}
@@ -282,8 +288,8 @@ async function renderTaskDetail(taskId:string){
   verificationList.innerHTML=verificationEvidence?.checks?.length?verificationEvidence.checks.map((check:any)=>`<li data-pass="${!!check.passed}"><span class="check-icon">${svgIcon(check.passed?"check":"x")}</span><div><strong>${esc(verificationLabel(check.id))}</strong><small class="technical-id">${esc(check.id)}</small>${check.message?`<div>${esc(check.message)}</div>`:""}</div></li>`).join(""):`<li><span class="check-icon">${svgIcon("circle")}</span><div>${esc(t("verification.waiting"))}</div></li>`;
   latestEvidence=JSON.stringify(evidence,null,2);rawEvidence.textContent=latestEvidence;
   const localeType=`manager.summary.${getLocale()}`;const manager=evidence.find(item=>item.type===localeType)?.data as any ?? (getLocale()==="en"?evidence.find(item=>item.type==="manager.summary")?.data as any:undefined);
-  aiSummary.innerHTML=manager?.html??(task.status==="completed"?`<p>${esc(t("task.verifiedCompleteNoSummary"))}</p>`:`<p>${esc(t("task.summaryOnlyAfter"))}</p>`);gatewayStatus.textContent=manager?t("feedback.gatewayConnected"):t("task.gatewayNotCalledForTask");
-  currentActivity.innerHTML=projectTaskActivity(events).map(event=>`<li><span class="activity-icon ${event.type==="COMPLETED"?"done":event.type==="FAILED"?"idle":"active"}">${svgIcon(event.type==="COMPLETED"?"check":event.type==="FAILED"?"x":"circle-dot")}</span><div class="activity-copy"><strong>${esc(activityLabel(event.type,event.message))}</strong><small>${esc(event.type)} · ${formatTime(event.occurredAt)}</small></div></li>`).join("")||`<li><span class="activity-icon idle">${svgIcon("circle")}</span><div>${esc(t("task.noTaskEvents"))}</div></li>`;
+  if(manager){aiSummary.innerHTML=manager.html;gatewayStatus.textContent=t("feedback.gatewayConnected");}else if(pendingManagerSummaries.has(task.id)){aiSummary.textContent=t("feedback.preparingSummary");gatewayStatus.textContent=t("feedback.preparingVerified");}else{aiSummary.innerHTML=task.status==="completed"?`<p>${esc(t("task.verifiedCompleteNoSummary"))}</p>`:`<p>${esc(t("task.summaryOnlyAfter"))}</p>`;gatewayStatus.textContent=t("task.gatewayNotCalledForTask");}
+  renderCurrentActivityFromEvents(events);
   setEmployeeMode(task.status==="needs-approval"||task.status==="needs-review"?"Waiting on manager":task.status==="running"?"Working":"Available");applyDomTranslations();
 }
 
@@ -324,6 +330,20 @@ function renderConnectionsPage(){
   connectionsPageBody.innerHTML=`<div class="connection-card-grid">${rows.map(row=>{const disconnected=row.status===t("common.notConnected");const demo=row.status===t("common.demo");return`<article class="connection-card ${disconnected?"disconnected":demo?"demo":""}"><div class="connection-card-head"><h3>${esc(row.name)}</h3><span class="connection-state ${disconnected?"off":demo?"demo":""}">${esc(row.status)}</span></div><p>${esc(row.purpose)}</p><dl><dt>${esc(t("connections.permission"))}</dt><dd>${esc(row.permission)}</dd><dt>${esc(t("connections.boundary"))}</dt><dd>${esc(row.boundary)}</dd><dt>${esc(t("connections.mode"))}</dt><dd>${esc(row.mode)}</dd></dl></article>`}).join("")}</div><p class="approval-empty connection-boundary-note">${esc(t("connections.noFake"))}</p>`;
 }
 
+function routeLoadingMarkup(key:string,count=3){return`<div class="route-loading" role="status" aria-live="polite" aria-busy="true"><span class="sr-only">${esc(t(key))}</span>${Array.from({length:count},()=>`<div class="route-loading-card"><span class="skeleton"></span><span class="skeleton"></span></div>`).join("")}</div>`;}
+function renderRouteLoading(route:AppRoute){
+  if(getAppState()!=="ready")return;
+  if(route.name==="work"){const html=routeLoadingMarkup("loading.work",3);workBody.innerHTML=`<tr><td colspan="5">${html}</td></tr>`;workCards.innerHTML=html;return;}
+  if(route.name==="inbox"){inboxList.innerHTML=`<li>${routeLoadingMarkup("loading.inbox",3)}</li>`;return;}
+  if(route.name==="customers"){customerList.innerHTML=routeLoadingMarkup("loading.customers",4);customerDetail.innerHTML=routeLoadingMarkup("loading.customer",2);return;}
+  if(route.name==="customer"){customerDetail.innerHTML=routeLoadingMarkup("loading.customer",3);return;}
+  if(route.name==="history"){historyList.innerHTML=routeLoadingMarkup("loading.history",3);return;}
+  if(route.name==="approvals"){approvalList.innerHTML=routeLoadingMarkup("loading.approvals",2);return;}
+  if(route.name==="approval"){if(!approvals.some(item=>item.id===route.params.approvalId))approvalDetail.innerHTML=routeLoadingMarkup("loading.approval",2);return;}
+  if(route.name==="task"){if(!tasks.some(item=>item.id===route.params.taskId)){businessResult.innerHTML=routeLoadingMarkup("loading.task",2);verificationList.innerHTML=`<li>${routeLoadingMarkup("loading.task",2)}</li>`;aiSummary.innerHTML=routeLoadingMarkup("loading.task",1);}return;}
+}
+function genericRouteTitle(route:AppRoute){const key=route.name==="task"?"task.latest":route.name==="approval"?"approvals.detail":route.name==="customer"?"nav.customers":`nav.${route.name}`;return`${t(key)} · Alex`;}
+
 function replaceRoute(path:string,query:Record<string,string|undefined>={}){history.replaceState(null,"",`${location.pathname}${location.search}${routeHref(path,query)}`);void applyRoute(parseHash());}
 let lastFocusedPath="";let routeEpoch=0;let routeFocusInitialized=false;
 async function applyRoute(route:AppRoute){
@@ -331,6 +351,7 @@ async function applyRoute(route:AppRoute){
   currentRoute=route;document.body.className=document.body.className.replace(/\broute-[a-z-]+\b/g,"").trim();document.body.classList.add(`route-${route.name}`);
   document.querySelectorAll<HTMLElement>("[data-pages]").forEach(element=>{const pages=(element.dataset.pages??"").split(/\s+/);element.hidden=!pages.includes(route.name);});
   const parent=navParent(route);document.querySelectorAll<HTMLElement>("[data-nav-route]").forEach(element=>{const active=element.dataset.navRoute===parent;element.classList.toggle("active",active);if(active)element.setAttribute("aria-current","page");else element.removeAttribute("aria-current");});closeDrawer(false);
+  document.title=genericRouteTitle(route);renderRouteLoading(route);await waitForDemoTestDelay("route");if(!isCurrent())return;
   const titleFor=(key:string)=>`${t(key)} · Alex`;
   let detailHeading:{selector:string;text:string}|undefined;
   if(route.name==="home"){document.title=titleFor("nav.home");if(tasks[0])await renderTaskDetail(tasks[0].id);else resetWorkspace(false,false);if(!isCurrent())return;}
@@ -353,28 +374,30 @@ async function applyRoute(route:AppRoute){
 
 async function createManagerSummary(result:BusinessWorldResult){
   if(result.task.status!=="completed"||result.verification.status!=="PASS")return;
+  pendingManagerSummaries.add(result.task.id);
   const summaryLocale=getLocale();const language=localeLanguageName(summaryLocale);aiSummary.textContent=t("feedback.preparingSummary");gatewayStatus.textContent=t("feedback.preparingVerified");
   try{const response=await gateway.chat({messages:[{role:"system",content:`You are Alex, an operations employee. Respond in ${language}. Summarize only the supplied verified facts for a manager. Do not invent business facts or completion claims. Language controls presentation only and must not alter verification or business truth.`},{role:"user",content:JSON.stringify({intent:result.task.intent,summary:result.summary,verification:result.verification})}]});const choices=(response as any)?.choices;const text=Array.isArray(choices)&&typeof choices[0]?.message?.content==="string"?choices[0].message.content:t("outcome.completed");const html=safeMarkdown(text);aiSummary.innerHTML=html;gatewayStatus.textContent=t("feedback.gatewayConnected");gatewayConnection.textContent=t("common.connected");await work.saveEvidence({id:`evidence-${result.task.id}-manager-${summaryLocale}`,taskId:result.task.id,type:`manager.summary.${summaryLocale}`,source:"demo-gateway",createdAt:new Date().toISOString(),data:{html,locale:summaryLocale}});}
   catch(error){gatewayConnection.textContent=t("common.unavailable");gatewayStatus.textContent=error instanceof DemoGatewayRateLimitError?error.message:error instanceof DemoGatewayError&&error.status===403?t("feedback.gatewayOrigin"):t("feedback.gatewayUnavailable");aiSummary.textContent=t("feedback.summaryUnavailable");}
+  finally{pendingManagerSummaries.delete(result.task.id);}
 }
 
 async function resolveCustomerChoice(taskId:string,customerId:string){
   if(running)return;
-  running=true;assignButton.disabled=true;suggestionButtons.forEach(button=>button.disabled=true);setEmployeeMode("Working");
+  running=true;setAssignmentControls(true);setEmployeeMode("Working");
   try{
     const result=await resolveAmbiguousCustomerReview(business,work,taskId,customerId);
-    await renderAll();await renderTaskDetail(result.task.id);await createManagerSummary(result);await renderTaskDetail(result.task.id);
+    await renderAll();await renderTaskDetail(result.task.id);void createManagerSummary(result).then(()=>renderTaskDetail(result.task.id));
     if(currentRoute.name!=="task"||currentRoute.params.taskId!==result.task.id)navigate(`/tasks/${result.task.id}`);
-  }finally{running=false;assignButton.disabled=false;suggestionButtons.forEach(button=>button.disabled=false);}
+  }finally{running=false;setAssignmentControls(false);}
 }
 async function executeRouted(title:string,intent:any,customerQuery?:string,taskId?:string,resolvedCustomerId?:string){
-  running=true;assignButton.disabled=true;suggestionButtons.forEach(button=>button.disabled=true);setEmployeeMode("Working");
-  currentActivity.innerHTML=`<li><span class="activity-icon active">${svgIcon("circle-dot")}</span><div class="activity-copy"><strong>${esc(t("feedback.workingAssigned"))}</strong><small>${esc(intent)}</small></div></li>`;
+  running=true;setAssignmentControls(true);setEmployeeMode("Working");detailState.textContent=t("outcome.running");detailState.className="status-chip running";
+  const executionTaskId=taskId??`task-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;const observed:TaskEvent[]=[];renderCurrentActivityFromEvents(observed);
   try{
-    const result=await runBusinessWorldTask(business,work,{taskId,title,intent,customerQuery,resolvedCustomerId});
-    await renderAll();await renderTaskDetail(result.task.id);await createManagerSummary(result);await renderTaskDetail(result.task.id);
+    const result=await runBusinessWorldTask(business,work,{taskId:executionTaskId,title,intent,customerQuery,resolvedCustomerId,onEvent:async(event)=>{observed.push(event);renderCurrentActivityFromEvents(observed);await waitForDemoTestDelay("execution");}});
+    await renderAll();await renderTaskDetail(result.task.id);void createManagerSummary(result).then(()=>renderTaskDetail(result.task.id));
     navigate(`/tasks/${result.task.id}`);
-  }finally{running=false;assignButton.disabled=false;suggestionButtons.forEach(button=>button.disabled=false);}
+  }finally{running=false;setAssignmentControls(false);}
 }
 async function createBlocked(title:string,reason:string){
   const now=new Date().toISOString();
@@ -413,7 +436,7 @@ async function actOnInbox(id:string,action:string){
   await renderAll();
   if(relatedTask)await renderTaskDetail(relatedTask.id);
 }
-async function assign(){if(running)return;const title=taskInput.value.trim();if(!title){composerFeedback.textContent=t("feedback.enterTask");return;}composerFeedback.textContent="";const canonical=pendingSuggestion&&title===pendingSuggestion.display?pendingSuggestion.canonical:title;const routed=await routeDashboardTask(canonical,business);pendingSuggestion=null;if(routed.intent==="unsupported"){await createBlocked(title,routed.reason??"Unsupported capability");return;}if(routed.intent==="approval-demo"){await createApprovalScenario(title,routed.customerQuery??"ACME");return;}await executeRouted(title,routed.intent,routed.customerQuery,undefined,routed.resolvedCustomerId);}
+async function assign(){if(running||routing)return;const title=taskInput.value.trim();if(!title){composerFeedback.textContent=t("feedback.enterTask");return;}routing=true;setAssignmentControls(true);composerFeedback.textContent=t("loading.working");try{const canonical=pendingSuggestion&&title===pendingSuggestion.display?pendingSuggestion.canonical:title;const routed=await routeDashboardTask(canonical,business);pendingSuggestion=null;composerFeedback.textContent="";if(routed.intent==="unsupported"){await createBlocked(title,routed.reason??"Unsupported capability");return;}if(routed.intent==="approval-demo"){await createApprovalScenario(title,routed.customerQuery??"ACME");return;}await executeRouted(title,routed.intent,routed.customerQuery,undefined,routed.resolvedCustomerId);}finally{routing=false;if(!running)setAssignmentControls(false);}}
 function openDrawer(){trustDrawer.classList.add("open");drawerOverlay.classList.add("open");closeTrustDrawerButton.focus();}
 function closeDrawer(restoreFocus=true){trustDrawer.classList.remove("open");drawerOverlay.classList.remove("open");if(restoreFocus)openTrustDrawerButton.focus();}
 async function refreshAfterReset(message:string){await renderAll();resetWorkspace(true,false);composerFeedback.textContent=message;}
@@ -429,9 +452,9 @@ function bindEvents(){
   document.addEventListener("click",event=>{
     const element=event.target as HTMLElement;
     const compose=element.closest<HTMLButtonElement>(".customer-compose-action");if(compose?.dataset.task){const canonical=compose.dataset.task;navigate("/home");setTimeout(()=>setSuggestedTask(canonical,"feedback.customerAdded"),0);}
-    const candidate=element.closest<HTMLButtonElement>(".review-candidate");if(candidate?.dataset.taskId&&candidate.dataset.customerId)void resolveCustomerChoice(candidate.dataset.taskId,candidate.dataset.customerId);
-    const inboxButton=element.closest<HTMLButtonElement>(".inbox-action");if(inboxButton?.dataset.id&&inboxButton.dataset.action)void actOnInbox(inboxButton.dataset.id,inboxButton.dataset.action);
-    const approvalButton=element.closest<HTMLButtonElement>(".approval-action");if(approvalButton?.dataset.id&&approvalButton.dataset.action)void decideApproval(approvalButton.dataset.id,approvalButton.dataset.action as any);
+    const candidate=element.closest<HTMLButtonElement>(".review-candidate");if(candidate?.dataset.taskId&&candidate.dataset.customerId)void runUiMutation(`review:${candidate.dataset.taskId}`,candidate,"loading.resuming",()=>resolveCustomerChoice(candidate.dataset.taskId!,candidate.dataset.customerId!));
+    const inboxButton=element.closest<HTMLButtonElement>(".inbox-action");if(inboxButton?.dataset.id&&inboxButton.dataset.action)void runUiMutation(`inbox:${inboxButton.dataset.id}`,inboxButton,"loading.savingAction",async()=>{await actOnInbox(inboxButton.dataset.id!,inboxButton.dataset.action!);if(currentRoute.name==="inbox")focusCurrentRouteHeading();});
+    const approvalButton=element.closest<HTMLButtonElement>(".approval-action");if(approvalButton?.dataset.id&&approvalButton.dataset.action)void runUiMutation(`approval:${approvalButton.dataset.id}`,approvalButton,"loading.savingDecision",()=>decideApproval(approvalButton.dataset.id!,approvalButton.dataset.action as any));
   });
   taskInput.addEventListener("input",()=>{if(pendingSuggestion&&taskInput.value!==pendingSuggestion.display)pendingSuggestion=null;});
   customerSearch.addEventListener("input",()=>{if(currentRoute.name==="customers")replaceRoute("/customers",{q:customerSearch.value||undefined});else void renderCustomers(customerSearch.value);});
@@ -457,7 +480,12 @@ function bindEvents(){
 
 export async function bootstrapDashboard(){
   renderLocaleMeta();
-  await initializeBusinessWorld();bindEvents();
-  const router=createHashRouter({onRoute:applyRoute});router.start();
-  await renderAll();await applyRoute(parseHash());
+  await waitForDemoTestDelay("indexeddb");
+  await initializeBusinessWorld();
+  bindEvents();
+  await waitForDemoTestDelay("hydrate");
+  await renderAll();
+  const router=createHashRouter({onRoute:applyRoute});
+  router.start({initialApply:false});
+  await applyRoute(parseHash());
 }

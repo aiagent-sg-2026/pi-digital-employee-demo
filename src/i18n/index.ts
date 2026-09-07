@@ -26,11 +26,18 @@ export function t(key:string,params:Record<string,string|number>={}):string{let 
 export function tFor(target:SupportedLocale,key:string,params:Record<string,string|number>={}):string{let value=dictionaries[target][key]??en[key]??key;for(const [name,replacement] of Object.entries(params))value=value.replaceAll(`{${name}}`,String(replacement));return value;}
 export function onLocaleChange(listener:(locale:SupportedLocale)=>void){listeners.add(listener);return()=>listeners.delete(listener);}
 export async function setLocale(next:SupportedLocale,{persist=true}={}){locale=next;if(typeof document!=="undefined"){document.documentElement.lang=next;applyDomTranslations();}if(persist)await putRecord(STORES.preferences,{id:"ui-language",value:next,updatedAt:new Date().toISOString()});listeners.forEach(listener=>listener(locale));}
-export async function bootstrapI18n(){const saved=await getRecord<{id:string;value?:string}>(STORES.preferences,"ui-language");locale=resolveSupportedLocale(saved?.value)??detectBrowserLocale();document.documentElement.lang=locale;applyDomTranslations();return locale;}
+export async function bootstrapI18n(){let saved:{id:string;value?:string}|undefined;try{saved=await getRecord<{id:string;value?:string}>(STORES.preferences,"ui-language");}catch(error){locale=detectBrowserLocale();document.documentElement.lang=locale;applyDomTranslations();throw error;}locale=resolveSupportedLocale(saved?.value)??detectBrowserLocale();document.documentElement.lang=locale;applyDomTranslations();return locale;}
 
 function preserveWhitespace(original:string,replacement:string){const leading=original.match(/^\s*/)?.[0]??"",trailing=original.match(/\s*$/)?.[0]??"";return`${leading}${replacement}${trailing}`;}
 export function applyDomTranslations(root?:ParentNode){
   if(typeof document==="undefined")return;root??=document;
+  const explicit=(root instanceof Element?[root,...root.querySelectorAll("[data-i18n],[data-i18n-placeholder],[data-i18n-aria-label],[data-i18n-title]")]:[...root.querySelectorAll("[data-i18n],[data-i18n-placeholder],[data-i18n-aria-label],[data-i18n-title]")]) as HTMLElement[];
+  for(const element of explicit){
+    const textKey=element.dataset.i18n;if(textKey)element.textContent=t(textKey);
+    const placeholderKey=element.dataset.i18nPlaceholder;if(placeholderKey)element.setAttribute("placeholder",t(placeholderKey));
+    const ariaKey=element.dataset.i18nAriaLabel;if(ariaKey)element.setAttribute("aria-label",t(ariaKey));
+    const titleKey=element.dataset.i18nTitle;if(titleKey)element.setAttribute("title",t(titleKey));
+  }
   const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node=walker.nextNode() as Text|null;
   while(node){const trimmed=node.data.trim();let key=textKeys.get(node);if(!key&&trimmed)key=reverseEnglish.get(trimmed);if(key){textKeys.set(node,key);node.data=preserveWhitespace(node.data,t(key));}node=walker.nextNode() as Text|null;}
   const attrs=["placeholder","aria-label","title"];

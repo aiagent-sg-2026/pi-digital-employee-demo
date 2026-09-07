@@ -51,7 +51,7 @@ export async function bootstrapPwa(): Promise<void> {
   if (versionNode) versionNode.textContent = currentLabel;
   if (versionRail) versionRail.textContent = currentLabel;
   if (settingsVersion) settingsVersion.textContent = currentLabel;
-  if (settingsUpdateState) settingsUpdateState.textContent = t("settings.upToDate");
+  if (settingsUpdateState) settingsUpdateState.textContent = t("settings.checkingUpdate");
   if (!import.meta.env.PROD) {
     if (pwaStatus) pwaStatus.textContent = t("pwa.status.dev");
     if (pwaStatusRail) pwaStatusRail.textContent = t("pwa.status.devPreview");
@@ -60,6 +60,8 @@ export async function bootstrapPwa(): Promise<void> {
   if (!("serviceWorker" in navigator)) {
     if (pwaStatus) pwaStatus.textContent = t("pwa.status.unsupported");
     if (pwaStatusRail) pwaStatusRail.textContent = t("pwa.status.unsupported");
+    if (settingsStatus) settingsStatus.textContent = t("pwa.status.unsupported");
+    if (settingsUpdateState) settingsUpdateState.textContent = t("settings.updateUnavailable");
     return;
   }
 
@@ -69,7 +71,7 @@ export async function bootstrapPwa(): Promise<void> {
   let reloadingForUpdate = false;
 
   let statusKey = "pwa.status.offlineReady";
-  let updateStateKey = "settings.upToDate";
+  let updateStateKey = "settings.checkingUpdate";
   const setPwaStatus = (text: string) => {
     if (pwaStatus) pwaStatus.textContent = text;
     if (pwaStatusRail) pwaStatusRail.textContent = text;
@@ -119,17 +121,20 @@ export async function bootstrapPwa(): Promise<void> {
     if (registration.waiting) void showWaitingWorker(registration.waiting);
     registration.addEventListener("updatefound", () => observeInstallingWorker(registration));
 
-    const checkForUpdate = () => void registration.update().catch(() => undefined);
-    window.addEventListener("focus", checkForUpdate);
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
-    window.setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
-    checkForUpdate();
+    const checkForUpdate = async () => {
+      try {await registration.update();if(registration.waiting)await showWaitingWorker(registration.waiting);else setUpdateState("settings.upToDate");}
+      catch {if(navigator.onLine)setUpdateState("settings.updateUnavailable");}
+    };
+    window.addEventListener("focus", () => void checkForUpdate());
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") void checkForUpdate(); });
+    window.setInterval(() => void checkForUpdate(), UPDATE_CHECK_INTERVAL_MS);
+    void checkForUpdate();
   } catch (error) {
     if (navigator.onLine) {
-      statusKey="pwa.status.unavailable";setPwaStatus(t(statusKey));
+      statusKey="pwa.status.unavailable";setPwaStatus(t(statusKey));setUpdateState("settings.updateUnavailable");
       console.error("PWA service worker registration failed", error);
     } else {
-      statusKey="pwa.status.offlineCached";setPwaStatus(t(statusKey));
+      statusKey="pwa.status.offlineCached";setPwaStatus(t(statusKey));setUpdateState("settings.updateUnavailable");
     }
   }
 

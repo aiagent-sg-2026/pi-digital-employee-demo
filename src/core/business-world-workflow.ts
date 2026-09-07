@@ -16,6 +16,7 @@ export interface BusinessWorldTaskInput {
   intent: BusinessWorldIntent;
   customerQuery?: string;
   resolvedCustomerId?: string;
+  onEvent?: (event: TaskEvent) => void | Promise<void>;
 }
 export interface VerificationCheck { id: string; passed: boolean; message?: string; }
 export interface BusinessWorldResult {
@@ -126,6 +127,7 @@ export async function runBusinessWorldTask(business: BusinessRepository, work: W
     const occurredAt = new Date(base + sequence++).toISOString();
     const value: TaskEvent = { id: `event-${taskId}-${base}-${String(sequence).padStart(3, "0")}`, taskId, type, occurredAt, message, data };
     await work.appendTaskEvent(value);
+    await input.onEvent?.(value);
   };
   const evidence: BusinessEvidence[] = [];
   const saveEvidence = async (type: string, data: unknown) => {
