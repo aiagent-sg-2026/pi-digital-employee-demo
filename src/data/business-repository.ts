@@ -3,8 +3,32 @@ import { STORES, getAllByIndex, getAllRecords, getRecord, putRecord } from "./in
 import type { BusinessCreditNote, BusinessCustomer, BusinessException, BusinessFollowUpPolicy, BusinessInboxItem, BusinessInvoice, BusinessPayment, BusinessSnapshot } from "./models";
 
 const norm=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,"");
+const taskNorm=(value:string)=>value.normalize("NFKC").toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]+/g," ").replace(/\s+/g," ").trim();
+const phraseIn=(text:string,phrase:string)=>{const hay=` ${taskNorm(text)} `,needle=` ${taskNorm(phrase)} `;return needle.trim().length>0&&hay.includes(needle)};
+
+export interface CustomerReferenceResolution {
+  records: BusinessCustomer[];
+  canonical: BusinessCustomer[];
+  matchedTerms: string[];
+  query?: string;
+}
+
+export function resolveCustomerReferences(customers:readonly BusinessCustomer[],text:string):CustomerReferenceResolution{
+  const matched=new Map<string,{customer:BusinessCustomer;terms:string[]}>();
+  for(const customer of customers){
+    const terms=[customer.name,customer.code,...customer.aliases].filter(term=>phraseIn(text,term));
+    if(terms.length)matched.set(customer.id,{customer,terms});
+  }
+  const records=[...matched.values()].map(value=>value.customer);
+  const canonicalIds=new Set(records.map(customer=>customer.duplicateOf??customer.id));
+  const canonical=customers.filter(customer=>canonicalIds.has(customer.id)&&!customer.duplicateOf);
+  const matchedTerms=[...new Set([...matched.values()].flatMap(value=>value.terms))].sort((a,b)=>b.length-a.length);
+  return{records,canonical,matchedTerms,query:matchedTerms[0]};
+}
+
 export interface BusinessRepository {
   findCustomer(query:string):Promise<{records:BusinessCustomer[];canonical:BusinessCustomer[]}>;
+  resolveCustomerReference(text:string):Promise<CustomerReferenceResolution>;
   getCustomer(id:string):Promise<BusinessCustomer|undefined>;
   getInvoice(id:string):Promise<BusinessInvoice|undefined>;
   getPayment(id:string):Promise<BusinessPayment|undefined>;
@@ -19,7 +43,8 @@ export interface BusinessRepository {
 }
 
 export class IndexedDbBusinessRepository implements BusinessRepository {
-  async findCustomer(query:string){const needle=norm(query);const all=await getAllRecords<BusinessCustomer>(STORES.customers);const records=all.filter(c=>[c.code,c.name,...c.aliases].some(v=>norm(v).includes(needle)));const ids=new Set(records.map(c=>c.duplicateOf??c.id));const canonical=all.filter(c=>ids.has(c.id)&&!c.duplicateOf);return{records,canonical};}
+  async findCustomer(query:string){const needle=norm(query);if(!needle)return{records:[],canonical:[]};const all=await getAllRecords<BusinessCustomer>(STORES.customers);const records=all.filter(c=>[c.code,c.name,...c.aliases].some(v=>norm(v).includes(needle)));const ids=new Set(records.map(c=>c.duplicateOf??c.id));const canonical=all.filter(c=>ids.has(c.id)&&!c.duplicateOf);return{records,canonical};}
+  async resolveCustomerReference(text:string){return resolveCustomerReferences(await getAllRecords<BusinessCustomer>(STORES.customers),text)}
   getCustomer(id:string){return getRecord<BusinessCustomer>(STORES.customers,id)}
   getInvoice(id:string){return getRecord<BusinessInvoice>(STORES.invoices,id)}
   getPayment(id:string){return getRecord<BusinessPayment>(STORES.payments,id)}

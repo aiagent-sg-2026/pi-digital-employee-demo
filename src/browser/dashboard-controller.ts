@@ -363,11 +363,11 @@ async function resolveCustomerChoice(taskId:string,customerId:string){
     if(currentRoute.name!=="task"||currentRoute.params.taskId!==result.task.id)navigate(`/tasks/${result.task.id}`);
   }finally{running=false;assignButton.disabled=false;suggestionButtons.forEach(button=>button.disabled=false);}
 }
-async function executeRouted(title:string,intent:any,customerQuery?:string,taskId?:string){
+async function executeRouted(title:string,intent:any,customerQuery?:string,taskId?:string,resolvedCustomerId?:string){
   running=true;assignButton.disabled=true;suggestionButtons.forEach(button=>button.disabled=true);setEmployeeMode("Working");
   currentActivity.innerHTML=`<li><span class="activity-icon active">${svgIcon("circle-dot")}</span><div class="activity-copy"><strong>${esc(t("feedback.workingAssigned"))}</strong><small>${esc(intent)}</small></div></li>`;
   try{
-    const result=await runBusinessWorldTask(business,work,{taskId,title,intent,customerQuery});
+    const result=await runBusinessWorldTask(business,work,{taskId,title,intent,customerQuery,resolvedCustomerId});
     await renderAll();await renderTaskDetail(result.task.id);await createManagerSummary(result);await renderTaskDetail(result.task.id);
     navigate(`/tasks/${result.task.id}`);
   }finally{running=false;assignButton.disabled=false;suggestionButtons.forEach(button=>button.disabled=false);}
@@ -409,7 +409,7 @@ async function actOnInbox(id:string,action:string){
   await renderAll();
   if(relatedTask)await renderTaskDetail(relatedTask.id);
 }
-async function assign(){if(running)return;const title=taskInput.value.trim();if(!title){composerFeedback.textContent=t("feedback.enterTask");return;}composerFeedback.textContent="";const canonical=pendingSuggestion&&title===pendingSuggestion.display?pendingSuggestion.canonical:title;const routed=routeDashboardTask(canonical);pendingSuggestion=null;if(routed.intent==="unsupported"){await createBlocked(title,routed.reason??"Unsupported capability");return;}if(routed.intent==="approval-demo"){await createApprovalScenario(title,routed.customerQuery??"ACME");return;}await executeRouted(title,routed.intent,routed.customerQuery);}
+async function assign(){if(running)return;const title=taskInput.value.trim();if(!title){composerFeedback.textContent=t("feedback.enterTask");return;}composerFeedback.textContent="";const canonical=pendingSuggestion&&title===pendingSuggestion.display?pendingSuggestion.canonical:title;const routed=await routeDashboardTask(canonical,business);pendingSuggestion=null;if(routed.intent==="unsupported"){await createBlocked(title,routed.reason??"Unsupported capability");return;}if(routed.intent==="approval-demo"){await createApprovalScenario(title,routed.customerQuery??"ACME");return;}await executeRouted(title,routed.intent,routed.customerQuery,undefined,routed.resolvedCustomerId);}
 function openDrawer(){trustDrawer.classList.add("open");drawerOverlay.classList.add("open");closeTrustDrawerButton.focus();}
 function closeDrawer(restoreFocus=true){trustDrawer.classList.remove("open");drawerOverlay.classList.remove("open");if(restoreFocus)openTrustDrawerButton.focus();}
 async function refreshAfterReset(message:string){await renderAll();resetWorkspace(true,false);composerFeedback.textContent=message;}
