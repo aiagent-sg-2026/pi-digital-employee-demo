@@ -1,454 +1,295 @@
-# Pi Digital Employee Demo — Business World V1
+# Digital Employee
 
-A browser-first Digital Employee demo built around one product idea:
+> A browser-first Digital Employee that performs business work, pauses for human decisions, verifies outcomes deterministically, and keeps auditable evidence.
 
-> A small fictional company exists inside the browser, and Alex is actually working in it.
+**[Open the Live Demo](https://aiagent-sg-2026.github.io/pi-digital-employee-demo/)** · English · 简体中文 · 繁體中文 · PWA / offline-ready
 
-The public GitHub Pages application is **work-first, not chat-first**. A user assigns work; Alex resolves a capability, reads business data, records task events, handles review/approval states, verifies the result deterministically, stores evidence, and only then may ask the Demo Gateway for a manager-friendly summary.
+![Digital Employee Home Dashboard](docs/images/home-dashboard.png)
 
-## Current product
+## What is a Digital Employee?
 
-Employee:
+A chatbot answers a message. A **Digital Employee owns a work lifecycle**.
 
-- **Alex**
-- **Operations Employee**
-- Customer & finance operations
-- Browser-first static GitHub Pages runtime
+In this demo, **Alex** is an Operations Employee. You assign business work; Alex creates a task, works through customer and finance data, pauses when a manager must decide, resumes the same task after that decision, verifies the outcome, and preserves the evidence and history.
 
-Demo company:
+The product is intentionally **work-first, not chat-first**:
 
-- **Northstar Distribution Pte Ltd**
-- Seed: `demo-business-v1`
-- Snapshot: `2025-03-01`
-- Business + work SSOT: local IndexedDB
-- External ERP/Gmail writes: not connected
-
-Fresh storage always starts with:
-
-- `0 tasks` completed by Alex
-- `Ready for work`
-- no automatic ACME execution
-- no Demo Gateway request
-- a seeded business snapshot and pre-existing fictional business exceptions
-
-## Architecture
-
-```text
-Dashboard / Scenario Library / Customers / History
-                    │
-                    ▼
-              Task Router
-                    │
-                    ▼
-       Business World Employee Workflow
-                    │
-          ┌─────────┴─────────┐
-          ▼                   ▼
- BusinessRepository      WorkRepository
-          │                   │
-          └─────────┬─────────┘
-                    ▼
-             Local IndexedDB
-                    │
-                    ▼
-       Deterministic Verification
-                    │
-             PASS only ──────► Demo Gateway summary
+```mermaid
+flowchart LR
+    A[Task] --> B[Work]
+    B --> C{Exception / Approval?}
+    C -->|Yes| D[Human Decision]
+    D --> E[Resume same task]
+    C -->|No| F[Verification]
+    E --> F
+    F --> G[Business Result]
+    G --> H[Evidence]
+    H --> I[Persistent History]
 ```
 
-The browser entry `src/browser/main.ts` is intentionally thin. Browser orchestration/projection lives in `src/browser/dashboard-controller.ts`; business data and work history are accessed through repository abstractions rather than direct IndexedDB calls from the employee workflow.
+The important rule is simple: **the model does not get to declare business completion just because it says it finished. Completion is gated by deterministic verification.**
 
-Key modules:
+## Try This First
 
-```text
-src/demo/seed.ts
-src/data/models.ts
-src/data/indexeddb.ts
-src/data/business-repository.ts
-src/data/work-repository.ts
-src/core/business-world-workflow.ts
-src/core/demo-approval.ts
-src/browser/task-router.ts
-src/browser/dashboard-controller.ts
-src/browser/main.ts
-```
+The fastest way to understand the project is to run these four tasks from Home.
 
-The earlier Phase 0–3 ACME mock workflow remains in the repository as Node/browser regression coverage and portability proof. It is no longer the browser Business World SSOT.
+### 1. Verified Receivables Review
 
-## IndexedDB schema
-
-Database:
-
-```text
-digital-employee-dashboard-v1
-DB version: 2
-```
-
-Business stores:
-
-- `meta`
-- `customers`
-- `invoices`
-- `payments`
-- `creditNotes`
-- `followUpPolicies`
-
-Work/audit stores:
-
-- `tasks`
-- `taskEvents`
-- `approvals`
-- `inbox`
-- `evidence`
-- `draftActions`
-
-Business entities are not duplicated into each task. Tasks contain task-level summary/status; detailed execution evidence is stored separately.
-
-## Demo seed pack
-
-`demo-business-v1` currently seeds approximately:
-
-- 17 canonical customers plus a legacy duplicate row
-- 44 invoices
-- 23 payments
-- 7 credit notes
-- 6 follow-up policies
-- 5 seeded inbox/exception items
-- 3 launchable approval scenarios
-
-Included business cases:
-
-- fully paid accounts
-- partial payments
-- 45+ day overdue invoices
-- future/upcoming due invoices
-- credit notes
-- duplicate invoice/payment imports
-- unmatched payment
-- ambiguous customer identity (`Twin`)
-- credit-limit exposure
-- invoice dispute
-- customers with zero action required
-
-ACME is preserved for regression compatibility. It still reconciles to three open invoices and SGD 14,520 in the fixed seed, but those fixture values are not runtime completion rules.
-
-## Supported capabilities
-
-The browser task router supports:
-
-- `customer.lookup`
-- `receivables.review`
-- `payments.reconcile`
-- `followup.prepare`
-- `exceptions.review`
-- `portfolio.overdue`
-- `daily.brief`
-
-Examples:
+Assign:
 
 ```text
 Review ACME receivables.
-Check Beacon receivables.
-Show overdue customers.
-Which customers owe us the most?
-Investigate unmatched payments.
+```
+
+Watch Alex:
+
+- resolve the customer,
+- review invoices, payments and credit notes,
+- prepare follow-up actions,
+- run deterministic business checks,
+- show the verified result,
+- preserve execution evidence.
+
+**Why it matters:** this demonstrates the normal work path from assignment to a business result that can be independently checked.
+
+### 2. Human Review → Resume
+
+Assign:
+
+```text
 Resolve ambiguous customer.
-Review today's exceptions.
-Prepare today's brief.
 ```
 
-A uniquely resolved customer executes. An ambiguous or missing customer becomes `Needs Review`. Unsupported work is `Blocked` before business execution; it is not silently reinterpreted as a failed customer lookup.
+You should see:
 
-## Portfolio work
+- **Twin North Trading Pte Ltd** and **Twin South Trading Pte Ltd** as candidate cards,
+- the task enter **Needs Review**,
+- a human choose the canonical customer,
+- `REVIEW_RESOLVED` appended to the same task timeline,
+- the **same taskId** resume,
+- receivables work and verification continue to completion.
 
-`portfolio.overdue` works across the company rather than a single customer. It produces:
+![Ambiguous customer human review](docs/images/ambiguous-customer-review.png)
 
-- total overdue customers
-- total overdue amount
-- highest-priority accounts
-- upcoming-due accounts
-- exceptions requiring review
+**Why it matters:** the Digital Employee does not guess when business identity is ambiguous. It asks, records the decision, and continues the original work.
 
-This is derived from the seeded business stores at runtime.
+### 3. Approval → Resume
 
-## Task event ledger
-
-Task history uses event-based lifecycle records such as:
+Assign:
 
 ```text
-CREATED
-ROUTED
-STARTED
-CUSTOMER_RESOLVED
-CAPABILITY_STARTED
-CAPABILITY_COMPLETED
-VERIFYING
-NEEDS_REVIEW
-NEEDS_APPROVAL
-APPROVED
-REJECTED
-RESUMED
-COMPLETED
-FAILED
+Demo approval flow for ACME follow-up.
 ```
 
-Current Activity and History are projections of these events where applicable. Evidence is kept separately from the task record.
+Expected flow:
 
-## Verification
+- task pauses in **Needs Approval**,
+- manager sees what will happen, why, affected data and business impact,
+- **Approve & Resume** creates only a local demo draft action,
+- the same task resumes,
+- verification runs,
+- task completes.
 
-Business completion is verification-gated. The LLM cannot declare a task complete.
+You can also choose **Reject**. The task becomes Blocked, no draft action is created, and no external business system is changed.
 
-Runtime checks include business invariants such as:
+![Manager approval detail](docs/images/approval-detail.png)
 
-- unique customer identity
-- reviewed records match the resolved customer
-- invoice count consistency
-- outstanding-total reconciliation
-- non-negative balances
-- currency consistency
-- duplicate suppression
-- canonical payments
-- follow-up coverage
-- follow-up amount equals the corresponding outstanding balance
-- portfolio totals/count consistency
+**Why it matters:** work that resembles an external-impact action should pause before a manager-controlled decision.
 
-Fixed fixture expectations such as ACME's `3` invoices / `SGD 14,520` remain Golden Oracle/test data only.
+### 4. Portfolio Work
 
-## Approval simulation
-
-Approval scenarios are explicitly labelled:
-
-- `Local Demo Simulation`
-- `No external system changed`
-
-A pending approval pauses the task. Approve & Resume:
-
-1. records `APPROVED`
-2. records `RESUMED`
-3. creates a local `draftActions` record
-4. resumes the repository-backed workflow
-5. runs deterministic verification
-6. records evidence/result
-
-Reject marks the task blocked, records `REJECTED`, stores rejection evidence, and performs no business execution.
-
-Current scenario library includes ACME, Bright Star high-value, and Riverside dispute approval examples.
-
-## Inbox
-
-Inbox items are real local work-queue records with:
-
-- type
-- severity
-- related entity
-- status
-- title/detail
-- resolution
-
-Supported lifecycle:
+Assign:
 
 ```text
-Open → Investigate → Resolve
-                   ↘ Escalate
+Show overdue customers.
 ```
 
-Seeded examples include unmatched payment, duplicate payment, invoice dispute, credit-limit exposure, and ambiguous identity. Runtime review/approval tasks can add additional inbox items.
+Alex performs a business-wide review instead of a single-customer lookup. The result includes overdue customer count, overdue amount, priority accounts, upcoming-due accounts, exceptions and deterministic portfolio checks.
 
-### Recoverable human review and issue identity
+**Why it matters:** the employee can operate across the Business World, not only on ACME.
 
-`Needs Review` is recoverable work, not a terminal demo state. Ambiguous customer reviews persist candidate customer IDs on the original task. The manager sees human-readable candidate cards with customer name, code, risk and outstanding balance. Selecting a candidate records `REVIEW_RESOLVED`, stores the chosen canonical customer, resumes the **same task ID**, reruns receivables work, and reaches deterministic verification. The complete pre-review and post-review event timeline remains inspectable.
+## What makes this different from an AI chatbot?
 
-Inbox records use stable `issueKey` identities plus `relatedTaskIds`. Repeating the same unresolved ambiguity updates the existing actionable item rather than inserting unbounded duplicates. Approval records and their approval-required Inbox item share the same issue identity, so `Need attention` counts a manager action once rather than counting both UI representations.
+| Chatbot pattern | Digital Employee pattern |
+| --- | --- |
+| Message → answer | Task → work lifecycle |
+| Model says it is done | Deterministic verification gates completion |
+| Ambiguity may become a guess | Ambiguity becomes Human Review |
+| Confirmation is generic | Approval explains what / why / impact |
+| Conversation is the history | Task ledger + events + evidence are the history |
+| Tool details dominate | Business result first, machine evidence second |
 
-Inbox resolution is domain-specific and always local-only:
+## Product Walkthrough
 
-- ambiguous customer → select canonical customer and resume the related task;
-- duplicate payment → suppress the duplicate import record locally;
-- unmatched payment → map to an existing invoice/customer, dismiss, or escalate;
-- invoice dispute → acknowledge, escalate, or request manager review;
-- credit-limit exception → convert the issue into a local approval workflow.
+### Verified Result → Verification → Evidence
 
-Every local resolution can append task event/evidence records. No action writes to Globe3 ERP, Gmail, a bank, or any external business system.
+The strongest trust surface is Task Detail. Business Result comes first; friendly verification labels keep their canonical technical IDs; raw machine evidence stays collapsed until requested.
 
-### Task outcome versus issue resolution
+![Task deterministic verification](docs/images/task-verification.png)
 
-Task execution and business issue resolution are projected separately. A successful payment/exception investigation may be `Investigation completed · Action required` while the discovered Inbox issues remain open. When all related issues are resolved locally, the task can project `Completed · Resolved`. This prevents a green task-completion state from implying that every underlying business issue has been resolved.
+### Customer Workspace
 
-## Dashboard semantics
+Customer Detail combines identity, risk, credit limit, outstanding receivables, invoices, payments, open exceptions and related tasks. Context actions either navigate to the relevant work or populate the composer for explicit assignment.
 
-Home separates two different concepts.
+![Customer detail workspace](docs/images/customer-detail.png)
 
-### Employee Activity
+### Mobile
 
-- Tasks completed
-- Customers handled
-- Pending approvals
-- Need attention
+The same routed workspace works at 390×844 with bottom navigation, a More drawer, task cards, 44px touch targets and no horizontal overflow.
 
-These remain zero for completed work on a fresh visitor until the user actually assigns something.
+![Digital Employee mobile Home](docs/images/mobile-home.png)
 
-### Business Snapshot
+## Browser-first Architecture
 
-- Open receivables
-- Overdue invoices
-- Customers at risk
-- Exceptions
+The demo is deployable as a static GitHub Pages application. Business data and work state live locally in normalized IndexedDB stores; there is no browser-exposed provider API key.
 
-These may be non-zero immediately because the fictional company is already seeded.
+```mermaid
+flowchart TD
+    U[Manager / User] --> W[Digital Employee Workspace]
+    W --> R[Task Router]
+    R --> E[Browser Employee Workflow]
+    E --> C[Business Capabilities]
+    C --> B[(IndexedDB Business World SSOT)]
 
-## Scenario library
+    E --> L[(Tasks + Task Events)]
+    E --> A[(Approvals + Inbox)]
+    E --> X[(Evidence + Draft Actions)]
 
-Scenario buttons only populate the composer. They never execute automatically.
+    C --> V[Deterministic Verification]
+    V --> O[Verified Business Result]
+    O --> G[Demo Gateway Manager Summary]
 
-Categories:
+    classDef presentation fill:#f7f7f8,stroke:#8b8e94,color:#222;
+    class G presentation;
+```
 
-- Normal Work
-- Exception
-- Approval
+**Demo Gateway is presentation only.** It receives verified facts after deterministic completion and produces a manager-friendly summary. It is not the source of business truth and cannot override verification.
 
-The user must still press Assign.
+The repository also retains a separate Pi portability proof from the earlier phase. The current Browser Business World path is deliberately repository/workflow-driven so the demo stays deterministic and auditable.
 
-## Customers and History
+## Key Product Features
 
-Customers is backed by IndexedDB and supports:
+- **Work-first assignment** — Quick Actions and scenarios populate the composer; nothing auto-runs.
+- **Multi-customer Business World** — customer, invoice, payment, credit-note and policy data in local IndexedDB.
+- **Human Review → Resume** — ambiguous identity pauses instead of guessing.
+- **Approval → Resume / Reject** — manager-controlled local simulation with explicit impact and audit events.
+- **Actionable Inbox** — duplicate payments, unmatched payments, invoice disputes, credit exposure and ambiguity have domain-specific local actions.
+- **Deterministic verification** — reconciliation, identity, currency, duplicate suppression, payment and follow-up invariants.
+- **Evidence + history** — task events and evidence persist separately from business entities.
+- **Routed workspace** — Home, Work, Inbox, Customers, History, Approvals, Task Detail, Capabilities, Connections and Settings have real destinations and deep links.
+- **Localized product** — English, 简体中文 and 繁體中文 share one locale/formatter controller.
+- **PWA** — installable, offline app shell with user-controlled **Update Now**.
 
-- search/list
-- account summary
-- invoices
-- payments
-- risk/credit limit
-- related tasks
+## Routed Workspace
 
-History is persistent and supports task status plus event-timeline inspection. Result, verification, and evidence remain available through the task detail/trust UI after refresh.
+| Route | Purpose |
+| --- | --- |
+| `#/home` | Compact manager dashboard and task composer |
+| `#/work` | Operational task queue with status/customer filters |
+| `#/inbox` | Full actionable exception queue |
+| `#/customers` | Searchable customer workspace |
+| `#/customers/:customerId` | Customer account, exceptions and related work |
+| `#/history` | Terminal / audit work |
+| `#/approvals` | Manager decision queue |
+| `#/approvals/:approvalId` | Approval impact, related task and timeline |
+| `#/tasks/:taskId` | Result, Timeline, Verification, Evidence, Issues, Approval |
+| `#/capabilities` | What Alex reads, may change, verifies and requires approval for |
+| `#/connections` | Runtime / permission / demo-vs-real boundaries |
+| `#/settings` | Language, PWA, Demo Data and About |
 
-## Reset and migration
+## IndexedDB Business World
 
-Three actions are intentionally separate:
+Database: `digital-employee-dashboard-v1` · schema version `3`
 
-- **Clear task history** — clears tasks/events/approvals/evidence/drafts and runtime-created inbox items; seeded business data remains.
-- **Restore sample business data** — restores deterministic business entities and seeded exception records while preserving task history.
-- **Reset entire demo** — clears all local demo stores and recreates the deterministic seed with zero task history.
+Normalized stores:
 
-Migration supports both prior persisted formats:
+```text
+meta
+customers
+invoices
+payments
+creditNotes
+followUpPolicies
+tasks
+taskEvents
+approvals
+inbox
+evidence
+draftActions
+preferences
+```
 
-- legacy `localStorage` ledger
-- previous IndexedDB v1 `dashboard-state / ledger`
+Business entities are kept separate from task events and historical evidence. Language preference also has its own `preferences` store instead of being folded into a giant application-state object.
 
-Valid legacy task/history data is migrated into separated v2 stores before the old ledger record/key is removed. Migrated browsers may retain the now-empty legacy object-store shell until a future DB version upgrade; fresh v2 databases contain only current Business World stores.
+## Demo Boundaries
 
-## Demo Gateway security boundary
+This is intentionally an honest public demo:
 
-The Demo Gateway bearer token remains memory-only.
+- **Northstar Distribution Pte Ltd and its Business World are fictional demo data.**
+- Business and task data are stored locally in the browser with IndexedDB.
+- **Globe3 ERP is not connected** and no real ERP record is modified.
+- **Gmail is not connected** and the demo does not send customer email.
+- Approval actions are **Local Demo Simulation** only.
+- Demo Gateway only summarizes facts that already passed deterministic verification.
+- Gateway bearer tokens remain memory-only and are not persisted to IndexedDB, localStorage or sessionStorage.
+- Service Worker caching is limited to same-origin static app-shell resources.
+- Verification remains deterministic even when the manager summary is unavailable.
 
-It is never written to:
+## Engineering Highlights
 
-- IndexedDB
-- localStorage
-- sessionStorage
-- source code
-- Git history
+- Vanilla TypeScript + Vite; no framework rewrite required.
+- Browser-first static deployment on GitHub Pages.
+- Normalized IndexedDB as the local Business World SSOT.
+- Event-based task ledger with deep-linkable Task Detail.
+- Same-task Human Review resume with `REVIEW_RESOLVED`.
+- Approval approve/resume and reject/block paths.
+- Deterministic business invariant verification.
+- Persistent task history without reload re-execution.
+- English / Simplified Chinese / Traditional Chinese i18n.
+- Versioned PWA app shell, offline restore and user-controlled updates.
+- No analytics, session replay, tracking pixels or telemetry SDKs.
+- No provider API key exposed in the browser.
 
-The Gateway is used only after deterministic verification passes and only to summarize already-verified facts.
-
-## Mobile and accessibility
-
-- SVG-only UI icons
-- `system-ui` font stack; no external font CDN/files
-- 12px visible metadata floor, 14–16px normal UI/body scale
-- bottom navigation on mobile
-- employee trust rail becomes a bottom-sheet drawer
-- My Work becomes task cards on mobile
-- Scenario Library becomes a horizontal scroller
-- Customers/History are compact on mobile and expand on demand
-- visible interactive targets target at least 44px
-- skip link + `:focus-visible`
-- Escape closes the trust drawer
-- no horizontal overflow at 390×844
-
-## Commands
+## Local Development
 
 ```bash
 npm install
 npm test
 npm run build
+```
+
+Development server:
+
+```bash
 npm run dev
 ```
 
-The older Pi portability proof can still be run with:
+Production preview after build:
 
 ```bash
-npm run demo:node
+npm run preview
 ```
 
-## Production-demo boundary
+The public demo is designed for GitHub Pages under the `/pi-digital-employee-demo/` base path.
 
-This is a static public demo, not a production ERP employee.
+## Quality Gates
 
-Not connected / not claimed:
+The project maintains tests for:
 
-- server-side database
-- real Globe3 ERP write access
-- Gmail sending
-- cross-device task synchronization
-- production identity/RBAC
-- external approval execution
-- production credentials
+- Business World repositories and workflows,
+- Human Review and Approval resume behavior,
+- deterministic verification,
+- routing / deep-link contracts,
+- i18n / IndexedDB preference durability,
+- PWA update and offline behavior,
+- presentation hierarchy and SVG-only icon policy.
 
-Local IndexedDB is the Business World V1 SSOT. A future real-business pilot can replace the repository adapters while preserving the employee/task/verification contracts.
+Release QA also covers desktop and 390×844 mobile in `en`, `zh-CN` and `zh-TW`.
 
-## PWA standard and update lifecycle
+## Social Preview Direction
 
-The GitHub Pages browser app is a scoped installable PWA. `package.json` is the semantic version SSOT; the production build also embeds the current Git commit/build id, shown in the UI as `v<version> · <build>`. The manifest uses only local SVG app icons, including a maskable SVG, preserving the project's SVG-only icon rule.
+The current fallback is a **real production Home screenshot** in `public/social-preview.png`. The design specification for a future custom GitHub social preview is documented in [`docs/SOCIAL_PREVIEW.md`](docs/SOCIAL_PREVIEW.md).
 
-Build output includes:
+---
 
-- `manifest.webmanifest` — standalone app identity, scope, theme and SVG icons.
-- `sw.js` — versioned service worker with app-shell precache and offline navigation fallback.
-- `version.json` — network-fresh version/build metadata for diagnostics.
-
-The service worker never caches cross-origin requests, non-GET requests, Demo Gateway traffic, bearer tokens, or IndexedDB business/task data. Business/task state remains in IndexedDB and the Demo Gateway token remains memory-only.
-
-Updates are intentionally user-controlled. A new deploy installs as a waiting service worker. The dashboard surfaces `Update available` with the target `v<version> · <build>` and an **Update Now** action. Only Update Now sends `SKIP_WAITING`; after `controllerchange` the page reloads onto the new shell. The app checks for updates on focus, when returning to a visible tab, and every 30 minutes.
-
-A supported browser may also expose the custom `Install App` action through `beforeinstallprompt`. Chromium installability is validated against the generated manifest; offline reload is covered by browser E2E.
-
-## Product information architecture and hash routing
-
-The static GitHub Pages app uses a small Vanilla TypeScript hash router rather than pretending one long document is a set of pages. GitHub Pages therefore remains direct-link safe without a server rewrite rule.
-
-Primary routes:
-
-- `#/home` — dashboard overview, composer, KPI, business snapshot and previews.
-- `#/work` — operational task queue with status/customer filtering.
-- `#/inbox` — full actionable Inbox with URL filters.
-- `#/customers` and `#/customers/:customerId` — customer workspace and deep-linked account detail.
-- `#/history` — terminal/audit work only.
-- `#/approvals` and `#/approvals/:approvalId` — manager decision queue and detail.
-- `#/tasks/:taskId?tab=...` — Result / Timeline / Verification / Evidence / Related Issues / Related Approval.
-- `#/capabilities` — supported Digital Employee capabilities and verification boundaries.
-- `#/connections` — real/demo/not-connected runtime boundaries.
-- `#/settings` — language, PWA/app information and destructive demo-data controls.
-
-Sidebar/mobile navigation uses route-aware active state and `aria-current="page"`. Browser Back/Forward follows the same source of truth. Detail routes hydrate IndexedDB before rendering and never rerun a business task or call the Demo Gateway merely because a URL was refreshed.
-
-Customer actions preserve navigation semantics: **View exceptions** routes to the filtered Inbox and **View related tasks** routes to filtered My Work. Review/prepare actions remain explicit composer suggestions and never auto-run.
-
-## In-app internationalization
-
-The product shell uses one local presentation-locale controller. V1 supports:
-
-- `en` — English default/fallback.
-- `zh-CN` — 简体中文.
-- `zh-TW` — 繁體中文.
-
-The first visit resolves `navigator.languages` to the closest supported locale. A manual selection in **Settings → Language** wins over the browser locale and is persisted in the normalized IndexedDB `preferences` store. Business-world reset actions do not delete this UI preference.
-
-All presentation formatting goes through the same locale source of truth: SGD money, dates, date-times and activity times. This prevents mixed states such as an English interface with a Chinese system-formatted time. `document.documentElement.lang`, route-aware `document.title`, navigation labels, accessibility labels, task outcomes, Inbox status/type/severity, approval presentation, customer labels, history/timeline, verification labels and PWA status/update controls all follow the selected locale.
-
-Business and technical identity is deliberately not translated: customer/company names, customer codes, invoice/payment identifiers, task IDs, issue keys, capability IDs, raw event IDs, verification IDs and machine-readable Evidence remain canonical. Verification IDs are shown only as secondary technical identifiers beside localized human-readable check labels.
-
-The Demo Gateway receives the selected presentation language only after deterministic verification has passed. The system instruction explicitly limits language to presentation and forbids it from changing verification or business truth. Manager summaries are cached as locale-specific evidence (`manager.summary.<locale>`).
-
-Quick actions and guided scenarios populate the composer in the selected language while retaining an internal canonical deterministic route. They still require explicit Assign and never auto-run.
-
-The PWA manifest remains English for V1; installed-app metadata localization is intentionally deferred. In-app i18n is independent of manifest localization.
+Digital Employee V1 is a demonstration of a specific product idea: **AI should not merely say it did business work. It should leave behind a task, a decision trail, deterministic verification and evidence that a manager can inspect.**
