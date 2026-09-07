@@ -102,6 +102,6 @@ describe("Phase 3 complete employee workflow", () => {
     const result = await runOperationsEmployeeTask("node", { customerQuery: "ACME" }, { runtime });
     expect(result.task.state).toBe("NEEDS_REVIEW");
     expect(result.verification.status).toBe("NEEDS_REVIEW");
-    expect(result.verification.checks.find(({ id }) => id === "invoice.outstanding.total")?.passed).toBe(false);
+    expect(result.verification.checks.find(({ id }) => id === "invoice.outstanding.reconciled")?.passed).toBe(false);
   });
 });

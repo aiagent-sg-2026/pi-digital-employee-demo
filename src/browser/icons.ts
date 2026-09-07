@@ -2,7 +2,7 @@ export type IconName =
   | "home" | "work" | "mail" | "approval" | "users" | "tasks" | "history"
   | "skills" | "link" | "settings" | "search" | "bell" | "plus" | "sparkle"
   | "send" | "file" | "chart" | "alert" | "chevron-down" | "arrow-right"
-  | "circle" | "circle-dot" | "status-dot" | "check" | "x" | "shield" | "code";
+  | "circle" | "circle-dot" | "status-dot" | "check" | "x" | "shield" | "code" | "more";
 
 const paths: Record<IconName, string> = {
   home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-7h6v7"/>',
@@ -32,6 +32,7 @@ const paths: Record<IconName, string> = {
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   shield: '<path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z"/><path d="m8 12 2.5 2.5L16 9"/>',
   code: '<path d="m9 7-5 5 5 5M15 7l5 5-5 5M13 5l-2 14"/>',
+  more: '<circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
 };
 
 export function svgIcon(name: IconName, className = "icon-svg", label?: string): string {

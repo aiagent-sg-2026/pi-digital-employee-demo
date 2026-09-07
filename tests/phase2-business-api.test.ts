@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ACME_CUSTOMER_ID,
+  DEMO_ORACLE,
   MOCK_AS_OF_DATE,
   createMockBusinessApi,
   createOperationsRuntime,
@@ -31,9 +32,9 @@ describe("Phase 2 mock business data", () => {
     expect(review).toMatchObject({
       asOf: MOCK_AS_OF_DATE,
       currency: "SGD",
-      outstandingInvoices: 3,
-      outstandingTotal: 14520,
-      ignoredDuplicateRecordIds: ["invoice-acme-future-import-copy", "payment-acme-partial-import-copy"],
+      outstandingInvoices: DEMO_ORACLE.acme.outstandingInvoices,
+      outstandingTotal: DEMO_ORACLE.acme.outstandingTotal,
+      ignoredDuplicateRecordIds: DEMO_ORACLE.acme.ignoredDuplicateRecordIds,
     });
 
     const byId = Object.fromEntries(review.invoices.map((invoice) => [invoice.invoice.id, invoice]));
@@ -65,6 +66,6 @@ describe("Phase 2 capability-first runtime", () => {
       { customerId: ACME_CUSTOMER_ID },
       runtime,
     );
-    expect(review).toMatchObject({ outstandingInvoices: 3, outstandingTotal: 14520, currency: "SGD" });
+    expect(review).toMatchObject({ outstandingInvoices: DEMO_ORACLE.acme.outstandingInvoices, outstandingTotal: DEMO_ORACLE.acme.outstandingTotal, currency: "SGD" });
   });
 });

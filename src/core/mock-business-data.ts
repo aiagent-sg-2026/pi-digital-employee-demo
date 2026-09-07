@@ -3,6 +3,16 @@ import type { BusinessDataset } from "./business-api";
 export const MOCK_AS_OF_DATE = "2025-03-01";
 export const ACME_CUSTOMER_ID = "customer-acme";
 
+export const DEMO_ORACLE = {
+  snapshotDate: MOCK_AS_OF_DATE,
+  acme: {
+    customerId: ACME_CUSTOMER_ID,
+    outstandingInvoices: 3,
+    outstandingTotal: 14520,
+    ignoredDuplicateRecordIds: ["invoice-acme-future-import-copy", "payment-acme-partial-import-copy"],
+  },
+} as const;
+
 /**
  * Phase 2's deliberately small, deterministic business fixture. Duplicate rows
  * retain their own IDs and point at their canonical record, mirroring the shape

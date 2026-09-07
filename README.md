@@ -75,3 +75,37 @@ Layout scale:
 - <=760px: single-column mobile layout with no horizontal overflow.
 
 Do not introduce visible UI text below 12px. Keep spacing, row heights, card padding, and column widths aligned with the typography scale rather than shrinking text to make content fit.
+
+## Dashboard V1 behavior contract
+
+The public dashboard is deliberately work-first and user-triggered:
+
+- Fresh browser storage starts at `0 tasks`, `Ready`, and does not run ACME or call the Demo Gateway on page load.
+- Quick actions are composer suggestions only. The user must explicitly press Assign.
+- New Task clears the composer and selected task detail while preserving the demo ledger/history.
+- The V1 capability router accepts only ACME receivables work, the explicitly labelled unknown-customer exception test, and the explicitly labelled approval demo. Unsupported tasks are blocked before business execution or any model request.
+- Search, Settings, and unimplemented sidebar destinations are not shown as fake controls.
+- The fixed business fixture is labelled `Demo dataset · Snapshot 1 Mar 2025 · Read-only fixture`.
+
+### Verification versus demo oracle
+
+`DEMO_ORACLE` records fixture acceptance expectations such as ACME's 3 outstanding invoices and SGD 14,520 total. Those values are test/oracle data, not workflow completion rules. Runtime completion uses business invariants: customer identity consistency, outstanding count/total reconciliation, non-negative balances, currency consistency, canonical duplicate suppression, follow-up coverage and amount consistency, and canonical payments.
+
+### Demo approval flow
+
+`Demo approval flow` is explicitly marked as a Demo Scenario. It pauses a task as `Needs Approval`, shows what/why/affected data/business impact, and supports Approve & Resume or Reject. Approval never writes to ERP, Gmail, credit limits, or any external business source.
+
+### Demo ledger and KPI semantics
+
+Task history is persisted in browser `localStorage` under a versioned demo ledger so reloads preserve work history. The Demo Gateway bearer token remains memory-only and is never written to storage. The dashboard provides a Clear demo history action.
+
+KPI semantics are intentional:
+
+- completed task throughput counts repeated completed tasks;
+- customers handled is unique by customer;
+- outstanding reviewed is unique by customer + dataset snapshot, so repeating the same ACME review does not double-count SGD 14,520;
+- need attention counts unresolved inbox items plus pending approvals.
+
+### Mobile hierarchy and accessibility
+
+At mobile widths the desktop sidebar becomes a bottom navigation with Home, Work, Inbox, Approvals, and More. Employee status, connections, verification, and evidence live in a bottom-sheet trust drawer rather than extending the page. My Work renders task cards with context and progress instead of hiding table columns. Visible mobile controls target at least 44px. A skip link, `:focus-visible`, Escape-to-close drawer behavior, and keyboard focus transfer are part of the contract.

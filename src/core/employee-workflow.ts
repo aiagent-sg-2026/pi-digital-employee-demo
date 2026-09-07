@@ -121,22 +121,37 @@ export async function runOperationsEmployeeTask(
     const recalculatedTotal = outstandingRows.reduce((sum, invoice) => sum + invoice.outstandingAmount, 0);
     const outstandingIds = new Set(outstandingRows.map((invoice) => invoice.invoice.id));
     const followUpIds = new Set(followUps.map((item) => item.invoiceId));
-    const duplicateIds = new Set(review.ignoredDuplicateRecordIds);
-
+    const canonicalRecordIds = new Set([
+      ...review.invoices.map((invoice) => invoice.invoice.id),
+      ...payments.map((payment) => payment.id),
+    ]);
+    const ignoredDuplicateIds = review.ignoredDuplicateRecordIds;
+    const outstandingById = new Map(outstandingRows.map((invoice) => [invoice.invoice.id, invoice.outstandingAmount]));
     const checks = [
       { id: "customer.identity.unique", passed: lookup.canonicalCustomerIds.length === 1 },
       { id: "customer.identity.matches-review", passed: review.customer.id === customerId },
-      { id: "invoice.outstanding.count", passed: review.outstandingInvoices === 3 },
-      { id: "invoice.outstanding.total", passed: review.outstandingTotal === 14520 },
+      { id: "invoice.count.consistent", passed: review.outstandingInvoices === outstandingRows.length },
       { id: "invoice.outstanding.reconciled", passed: recalculatedTotal === review.outstandingTotal },
-      { id: "currency.sgd", passed: review.currency === "SGD" },
+      { id: "invoice.balance.nonnegative", passed: review.invoices.every((invoice) => Number.isFinite(invoice.outstandingAmount) && invoice.outstandingAmount >= 0) },
+      {
+        id: "currency.consistent",
+        passed: review.invoices.every((invoice) => invoice.invoice.currency === review.currency)
+          && payments.every((payment) => payment.currency === review.currency),
+      },
       {
         id: "duplicates.suppressed",
-        passed: duplicateIds.has("invoice-acme-future-import-copy") && duplicateIds.has("payment-acme-partial-import-copy"),
+        passed: new Set(ignoredDuplicateIds).size === ignoredDuplicateIds.length
+          && ignoredDuplicateIds.every((id) => !canonicalRecordIds.has(id))
+          && review.invoices.every((invoice) => !invoice.invoice.duplicateOf)
+          && payments.every((payment) => !payment.duplicateOf),
       },
       {
         id: "followup.coverage",
         passed: outstandingIds.size === followUpIds.size && [...outstandingIds].every((id) => followUpIds.has(id)),
+      },
+      {
+        id: "followup.amount.matches",
+        passed: followUps.every((item) => outstandingById.get(item.invoiceId) === item.outstandingAmount),
       },
       {
         id: "payments.canonical",
