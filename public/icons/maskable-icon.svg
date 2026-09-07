@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Digital Employee maskable app icon">
+  <rect width="512" height="512" fill="#303236"/>
+  <circle cx="256" cy="256" r="176" fill="#ffffff"/>
+  <path d="M168 181h83c65 0 108 31 108 75s-43 75-108 75h-83V181Zm80 104c35 0 56-10 56-29s-21-29-56-29h-27v58h27Z" fill="#303236"/>
+</svg>

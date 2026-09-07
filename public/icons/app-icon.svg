@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Digital Employee app icon">
+  <rect width="512" height="512" rx="112" fill="#303236"/>
+  <rect x="88" y="88" width="336" height="336" rx="84" fill="#ffffff"/>
+  <path d="M156 166h94c70 0 116 37 116 90s-46 90-116 90h-94V166Zm91 134c39 0 62-16 62-44s-23-44-62-44h-34v88h34Z" fill="#303236"/>
+</svg>

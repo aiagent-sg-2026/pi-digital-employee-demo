@@ -1,6 +1,9 @@
 import { hydrateSvgIcons } from "./icons";
 import { bootstrapDashboard } from "./dashboard-controller";
+import { bootstrapPwa } from "../pwa/client";
+
 hydrateSvgIcons();
+void bootstrapPwa();
 void bootstrapDashboard().catch((error)=>{
   console.error("Digital Employee dashboard bootstrap failed",error);
   const feedback=document.querySelector<HTMLElement>("#composer-feedback");

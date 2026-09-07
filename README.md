@@ -375,3 +375,19 @@ Not connected / not claimed:
 - production credentials
 
 Local IndexedDB is the Business World V1 SSOT. A future real-business pilot can replace the repository adapters while preserving the employee/task/verification contracts.
+
+## PWA standard and update lifecycle
+
+The GitHub Pages browser app is a scoped installable PWA. `package.json` is the semantic version SSOT; the production build also embeds the current Git commit/build id, shown in the UI as `v<version> · <build>`. The manifest uses only local SVG app icons, including a maskable SVG, preserving the project's SVG-only icon rule.
+
+Build output includes:
+
+- `manifest.webmanifest` — standalone app identity, scope, theme and SVG icons.
+- `sw.js` — versioned service worker with app-shell precache and offline navigation fallback.
+- `version.json` — network-fresh version/build metadata for diagnostics.
+
+The service worker never caches cross-origin requests, non-GET requests, Demo Gateway traffic, bearer tokens, or IndexedDB business/task data. Business/task state remains in IndexedDB and the Demo Gateway token remains memory-only.
+
+Updates are intentionally user-controlled. A new deploy installs as a waiting service worker. The dashboard surfaces `Update available` with the target `v<version> · <build>` and an **Update Now** action. Only Update Now sends `SKIP_WAITING`; after `controllerchange` the page reloads onto the new shell. The app checks for updates on focus, when returning to a visible tab, and every 30 minutes.
+
+A supported browser may also expose the custom `Install App` action through `beforeinstallprompt`. Chromium installability is validated against the generated manifest; offline reload is covered by browser E2E.

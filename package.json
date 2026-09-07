@@ -1,6 +1,6 @@
 {
   "name": "pi-digital-employee-demo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,8 @@
     "demo:node": "node --import tsx src/node/main.ts",
     "test": "vitest run",
     "test:node": "vitest run tests/node.test.ts",
-    "test:browser": "vitest run tests/browser-contract.test.ts"
+    "test:browser": "vitest run tests/browser-contract.test.ts",
+    "postbuild": "node scripts/finalize-pwa.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.85.0",
