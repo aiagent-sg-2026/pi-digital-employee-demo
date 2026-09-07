@@ -1,5 +1,6 @@
 import { runOperationsEmployeeTask } from "../core";
 import { createDemoGatewayClient, DemoGatewayError, DemoGatewayRateLimitError } from "../shared/demo-gateway-client";
+import { hydrateSvgIcons, svgIcon } from "./icons";
 
 type WorkflowResult = Awaited<ReturnType<typeof runOperationsEmployeeTask>>;
 type WorkStatus = "Running" | "Completed" | "Needs Review" | "Failed";
@@ -38,6 +39,7 @@ const briefCopy=document.querySelector<HTMLElement>("#brief-copy")!;
 const briefList=document.querySelector<HTMLElement>("#brief-list")!;
 const briefNote=document.querySelector<HTMLElement>("#brief-note")!;
 
+hydrateSvgIcons();
 const gateway=createDemoGatewayClient({origin:window.location.origin});
 const work:WorkItem[]=[];
 const inbox:InboxItem[]=[];
@@ -76,14 +78,14 @@ function renderWorkQueue():void{
   workBody.innerHTML=work.map(item=>`<tr><td><div class="task-name">${escapeHtml(taskTitle(item.task))}</div><div class="task-context">${escapeHtml(item.customerQuery)}</div></td><td>${escapeHtml(item.context)}</td><td><span class="status-chip ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td><td class="progress-copy">${escapeHtml(item.progress)}</td><td><button class="link-btn view-task" type="button" data-task-id="${escapeHtml(item.id)}">View</button></td></tr>`).join("");
 }
 function renderActivity(evidence:readonly{type:string}[],state:string):void{
-  if(!evidence.length){currentActivity.innerHTML=`<li><span class="activity-icon ${state==="RUNNING"?"active":"idle"}">${state==="RUNNING"?"●":"○"}</span><div class="activity-copy"><strong>${state==="RUNNING"?"Working on assigned task":"Waiting for work"}</strong><small>${state==="RUNNING"?"Alex is executing business capabilities.":"Assign a task to Alex."}</small></div></li>`;return}
+  if(!evidence.length){currentActivity.innerHTML=`<li><span class="activity-icon ${state==="RUNNING"?"active":"idle"}">${svgIcon(state==="RUNNING"?"circle-dot":"circle")}</span><div class="activity-copy"><strong>${state==="RUNNING"?"Working on assigned task":"Waiting for work"}</strong><small>${state==="RUNNING"?"Alex is executing business capabilities.":"Assign a task to Alex."}</small></div></li>`;return}
   const steps=evidence.filter(i=>i.type!=="verification"&&i.type!=="execution.error");
-  currentActivity.innerHTML=steps.map(item=>{const label=capabilityLabels[item.type]??{title:item.type,detail:"Business capability completed."};return `<li><span class="activity-icon done">✓</span><div class="activity-copy"><strong>${escapeHtml(label.title)}</strong><small>${escapeHtml(label.detail)}</small></div></li>`}).join("");
+  currentActivity.innerHTML=steps.map(item=>{const label=capabilityLabels[item.type]??{title:item.type,detail:"Business capability completed."};return `<li><span class="activity-icon done">${svgIcon("check")}</span><div class="activity-copy"><strong>${escapeHtml(label.title)}</strong><small>${escapeHtml(label.detail)}</small></div></li>`}).join("");
 }
 function renderVerification(result:WorkflowResult):void{
   const checks=result.verification.checks;const passed=checks.filter(c=>c.passed).length;
   verificationCount.textContent=`${passed} / ${checks.length} checks passed`;
-  verificationList.innerHTML=checks.map(c=>`<li data-pass="${c.passed}"><span class="check-icon">${c.passed?"✓":"!"}</span><div><strong>${escapeHtml(c.id)}</strong>${c.message?`<div style="color:#6b7280;margin-top:2px">${escapeHtml(c.message)}</div>`:""}</div></li>`).join("");
+  verificationList.innerHTML=checks.map(c=>`<li data-pass="${c.passed}"><span class="check-icon">${svgIcon(c.passed?"check":"x")}</span><div><strong>${escapeHtml(c.id)}</strong>${c.message?`<div style="color:#6b7280;margin-top:2px">${escapeHtml(c.message)}</div>`:""}</div></li>`).join("");
 }
 function renderBusinessResult(result:WorkflowResult):void{
   if(!result.summary){businessMeta.textContent=result.task.state==="NEEDS_REVIEW"?"Decision required":"Task failed";businessResult.innerHTML=`<div class="attention-box">${result.task.state==="NEEDS_REVIEW"?"Alex could not verify a unique customer identity. Review the inbox item before business work continues.":"Alex could not complete this task. Review the evidence for the failure reason."}</div>`;return}
@@ -100,7 +102,7 @@ function updateBrief():void{
   if(!work.length){briefTitle.textContent="Ready for work";briefCopy.textContent="No tasks have been assigned in this session yet.";briefList.innerHTML="";briefNote.textContent="Available";return}
   briefTitle.textContent=inbox.length?"One item needs your attention":"Operations are on track";
   briefCopy.textContent=inbox.length?"Alex completed what could be verified and brought the unresolved item back to you.":"Alex has completed the assigned work in this session with deterministic verification.";
-  briefList.innerHTML=`<li>✓ <b>${completedTasks}</b> completed</li><li>✓ <b>${handledCustomers.size}</b> customers handled</li><li>✓ <b>SGD ${outstandingReviewed.toLocaleString("en-SG")}</b> reviewed</li><li>${inbox.length?"⚠":"✓"} <b>${inbox.length}</b> need attention</li>`;
+  briefList.innerHTML=`<li>${svgIcon("check")}<b>${completedTasks}</b> completed</li><li>${svgIcon("check")}<b>${handledCustomers.size}</b> customers handled</li><li>${svgIcon("check")}<b>SGD ${outstandingReviewed.toLocaleString("en-SG")}</b> reviewed</li><li>${svgIcon(inbox.length?"alert":"check")}<b>${inbox.length}</b> need attention</li>`;
   briefNote.textContent=inbox.length?"Manager review needed":"On track";briefNote.style.background=inbox.length?"#fff8e6":"#ecfdf5";briefNote.style.color=inbox.length?"#9a6700":"#137a50";
 }
 function updateEmployeeState(mode:string):void{employeeMode.textContent=mode;lastUpdated.textContent=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
@@ -115,7 +117,7 @@ function viewTask(id:string):void{const item=work.find(c=>c.id===id);if(!item?.r
 async function assignTask(task:string):Promise<void>{
   if(running)return;const cleanTask=task.trim();if(!cleanTask)return;running=true;assignButton.disabled=true;quickTaskButtons.forEach(b=>{b.disabled=true});
   const customerQuery=deriveCustomerQuery(cleanTask);const item:WorkItem={id:`work-${Date.now()}`,task:cleanTask,customerQuery,context:customerQuery==="ACME"?"ACME Trading Pte Ltd":"Customer review",status:"Running",progress:"Working…"};work.unshift(item);renderWorkQueue();
-  setDetailState("RUNNING");businessMeta.textContent="Alex is working";businessResult.innerHTML='<p class="approval-empty">Alex is resolving the customer and reviewing receivables.</p>';verificationCount.textContent="Waiting for verification";verificationList.innerHTML='<li><span class="check-icon">·</span><div>Verification starts after business capabilities finish.</div></li>';rawEvidence.textContent="";aiSummary.textContent="Waiting for deterministic verification.";gatewayStatus.textContent="Gateway not called until verification passes.";renderActivity([],"RUNNING");updateEmployeeState("Working");
+  setDetailState("RUNNING");businessMeta.textContent="Alex is working";businessResult.innerHTML='<p class="approval-empty">Alex is resolving the customer and reviewing receivables.</p>';verificationCount.textContent="Waiting for verification";verificationList.innerHTML=`<li><span class="check-icon">${svgIcon("circle")}</span><div>Verification starts after business capabilities finish.</div></li>`;rawEvidence.textContent="";aiSummary.textContent="Waiting for deterministic verification.";gatewayStatus.textContent="Gateway not called until verification passes.";renderActivity([],"RUNNING");updateEmployeeState("Working");
   try{
     const result=await runOperationsEmployeeTask("browser",{customerQuery});item.result=result;item.status=result.task.state==="COMPLETED"?"Completed":result.task.state==="NEEDS_REVIEW"?"Needs Review":"Failed";item.progress=result.task.state==="COMPLETED"?"Verified · 4 steps":result.task.state==="NEEDS_REVIEW"?"Manager review required":"Execution stopped";
     setDetailState(result.task.state);renderBusinessResult(result);renderVerification(result);renderActivity(result.evidence,result.task.state);latestEvidence=JSON.stringify(result.evidence,null,2);rawEvidence.textContent=latestEvidence;

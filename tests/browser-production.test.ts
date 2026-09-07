@@ -58,4 +58,22 @@ describe("Digital Employee Dashboard V1 contract", () => {
     expect(html).toContain("@media(max-width:760px)");
     expect(html).toContain("grid-template-columns:220px minmax(0,1fr) 310px");
   });
+  it("uses SVG for every UI icon and forbids text/emoji icon glyphs", () => {
+    const html = readFileSync("index.html", "utf8");
+    const main = readFileSync("src/browser/main.ts", "utf8");
+    const icons = readFileSync("src/browser/icons.ts", "utf8");
+    const bannedIconGlyphs = ["⌂", "◫", "✉", "✓", "◎", "□", "↺", "◇", "⇄", "⚙", "⌄", "⌕", "♧", "＋", "✦", "➤", "▤", "♙", "▥", "◯", "△", "○", "●", "⚠", "→"];
+    for (const glyph of bannedIconGlyphs) {
+      expect(html).not.toContain(glyph);
+      expect(main).not.toContain(glyph);
+    }
+    expect(html).toContain('data-icon="home"');
+    expect(html).toContain('data-icon="bell"');
+    expect(html).toContain('data-icon="status-dot"');
+    expect(main).toContain("hydrateSvgIcons()");
+    expect(main).toContain('svgIcon("check")');
+    expect(icons).toContain("<svg");
+    expect(icons).toContain("viewBox=\"0 0 24 24\"");
+  });
+
 });
