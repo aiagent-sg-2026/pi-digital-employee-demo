@@ -105,6 +105,8 @@ async function runTask(customerQuery: string) {
         gatewayEl.textContent = error.message;
       } else if (error instanceof DemoGatewayError && error.status === 403) {
         gatewayEl.textContent = `Gateway Origin is not enabled yet for ${window.location.origin}. The verified employee workflow still completed locally.`;
+      } else if (error instanceof TypeError && error.message.includes("Failed to fetch")) {
+        gatewayEl.textContent = `Demo Gateway is not reachable from ${window.location.origin}. This usually means the Pages Origin is not enabled in gateway CORS yet. The verified employee workflow still completed locally.`;
       } else {
         gatewayEl.textContent = `AI summary unavailable: ${error instanceof Error ? error.message : String(error)}`;
       }
