@@ -52,3 +52,26 @@ The public browser LLM integration is isolated in `src/shared/demo-gateway-clien
 The public browser demo now presents the runtime as a work-first Digital Employee workspace rather than a chatbot. The employee identity is **Alex · Operations Employee**. The Home dashboard exposes task assignment, session KPIs, My Work, Inbox, Approvals, Today's Brief, Current Activity, Employee Status, Connections, verified business results, and collapsible technical evidence. Real integrations are not faked: Browser and Demo Gateway are available, Business Data is explicitly marked Demo, while Globe3 ERP and Gmail remain Not connected.
 
 The product UX keeps three trust layers separate: **Business Result → Verification → Technical Evidence**. The LLM can summarize a verified result but still cannot declare business completion.
+
+## Typography and layout SSOT
+
+The dashboard uses the browser/OS built-in `system-ui` stack and ships no font files, font CDN, or icon font. This avoids adding a font asset/license dependency to the project. If a bundled font is introduced later, it must be open-source; prefer MIT when available and otherwise require an explicitly approved open font license.
+
+Readable type scale:
+
+- 12px: metadata, badges, developer/audit secondary text — absolute visual floor.
+- 14px: standard UI text, navigation, tables, activity, checks, buttons.
+- 16px: body default, task input, primary readable content.
+- 18px: section/card headings.
+- 20px: reserved medium heading token.
+- 24px: KPI values.
+- 32px: desktop page heading; 28px on mobile.
+
+Layout scale:
+
+- Wide desktop: 240px sidebar / flexible main / 360px employee rail.
+- Compact desktop (<=1280px): 220px sidebar / flexible main / 330px rail.
+- <=1120px: employee rail moves below the main workspace.
+- <=760px: single-column mobile layout with no horizontal overflow.
+
+Do not introduce visible UI text below 12px. Keep spacing, row heights, card padding, and column widths aligned with the typography scale rather than shrinking text to make content fit.
