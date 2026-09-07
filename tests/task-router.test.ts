@@ -1,32 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { routeDashboardTask } from "../src/browser/task-router";
-
-describe("Digital Employee task capability router", () => {
-  it("routes ACME receivables work", () => {
-    expect(routeDashboardTask("Review ACME outstanding invoices and prepare follow-up actions.")).toMatchObject({
-      intent: "receivables-review",
-      customerQuery: "ACME",
-    });
-  });
-
-  it("routes the explicit unknown-customer demo", () => {
-    expect(routeDashboardTask("Test unknown-customer exception")).toMatchObject({
-      intent: "unknown-customer-demo",
-      customerQuery: "NO-SUCH-CUSTOMER",
-    });
-  });
-
-  it("routes only explicitly labelled approval demo work", () => {
-    expect(routeDashboardTask("Demo approval flow for ACME follow-up preparation.")).toMatchObject({
-      intent: "approval-demo",
-      customerQuery: "ACME",
-    });
-  });
-
-  it("blocks unsupported capabilities instead of treating arbitrary text as a customer query", () => {
-    const result = routeDashboardTask("Send an email to every customer tomorrow.");
-    expect(result.intent).toBe("unsupported");
-    expect(result.customerQuery).toBe("");
-    expect(result.reason).toContain("supports ACME receivables review");
-  });
+import {describe,expect,it} from "vitest";
+import {routeDashboardTask} from "../src/browser/task-router";
+describe("Business World task router",()=>{
+  it("routes multiple customer receivables",()=>{expect(routeDashboardTask("Review ACME outstanding invoices.")).toMatchObject({intent:"receivables.review",customerQuery:"ACME"});expect(routeDashboardTask("Check Beacon receivables.")).toMatchObject({intent:"receivables.review",customerQuery:"Beacon"});expect(routeDashboardTask("Review ACME overdue invoices and prepare follow-up actions.")).toMatchObject({intent:"followup.prepare",customerQuery:"ACME"});});
+  it("routes portfolio and exception work",()=>{expect(routeDashboardTask("Which customers owe us the most?").intent).toBe("portfolio.overdue");expect(routeDashboardTask("Show overdue customers.").intent).toBe("portfolio.overdue");expect(routeDashboardTask("Investigate unmatched payments.").intent).toBe("payments.reconcile");expect(routeDashboardTask("Review today's exceptions.").intent).toBe("exceptions.review");});
+  it("routes customer lookup and brief",()=>{expect(routeDashboardTask("Resolve ambiguous customer.")).toMatchObject({intent:"customer.lookup",customerQuery:"Twin"});expect(routeDashboardTask("Prepare today's brief.").intent).toBe("daily.brief");});
+  it("keeps approval explicit and blocks unsupported",()=>{expect(routeDashboardTask("Demo approval flow for ACME follow-up.").intent).toBe("approval-demo");expect(routeDashboardTask("Send an email to everyone tomorrow.").intent).toBe("unsupported");});
 });

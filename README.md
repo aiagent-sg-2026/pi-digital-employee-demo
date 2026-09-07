@@ -1,111 +1,377 @@
-# Pi Digital Employee Demo
+# Pi Digital Employee Demo — Business World V1
 
-Phase 2 keeps the Phase 0/1 portability proof and adds a deterministic, runtime-neutral mock business API. The Operations Assistant reaches customer, invoice, payment, and follow-up behavior through registered capabilities; a Pi adapter continues to own the Pi Agent Core boundary.
+A browser-first Digital Employee demo built around one product idea:
 
-## Phase 0
+> A small fictional company exists inside the browser, and Alex is actually working in it.
 
-- `@earendil-works/pi-agent-core` 0.85.0
-- shared `runPhase0()` agent/tool implementation
-- Node runtime proof
-- browser-first Vite bundle proof
-- deterministic fake stream, so no provider API key is required
-- one real Pi `Agent` tool execution lifecycle
+The public GitHub Pages application is **work-first, not chat-first**. A user assigns work; Alex resolves a capability, reads business data, records task events, handles review/approval states, verifies the result deterministically, stores evidence, and only then may ask the Demo Gateway for a manager-friendly summary.
 
-The deterministic stream replaces only the LLM provider. Tool execution, agent state transitions, event emission, and the second turn after the tool result are executed by Pi Agent Core itself.
+## Current product
+
+Employee:
+
+- **Alex**
+- **Operations Employee**
+- Customer & finance operations
+- Browser-first static GitHub Pages runtime
+
+Demo company:
+
+- **Northstar Distribution Pte Ltd**
+- Seed: `demo-business-v1`
+- Snapshot: `2025-03-01`
+- Business + work SSOT: local IndexedDB
+- External ERP/Gmail writes: not connected
+
+Fresh storage always starts with:
+
+- `0 tasks` completed by Alex
+- `Ready for work`
+- no automatic ACME execution
+- no Demo Gateway request
+- a seeded business snapshot and pre-existing fictional business exceptions
+
+## Architecture
+
+```text
+Dashboard / Scenario Library / Customers / History
+                    │
+                    ▼
+              Task Router
+                    │
+                    ▼
+       Business World Employee Workflow
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+ BusinessRepository      WorkRepository
+          │                   │
+          └─────────┬─────────┘
+                    ▼
+             Local IndexedDB
+                    │
+                    ▼
+       Deterministic Verification
+                    │
+             PASS only ──────► Demo Gateway summary
+```
+
+The browser entry `src/browser/main.ts` is intentionally thin. Browser orchestration/projection lives in `src/browser/dashboard-controller.ts`; business data and work history are accessed through repository abstractions rather than direct IndexedDB calls from the employee workflow.
+
+Key modules:
+
+```text
+src/demo/seed.ts
+src/data/models.ts
+src/data/indexeddb.ts
+src/data/business-repository.ts
+src/data/work-repository.ts
+src/core/business-world-workflow.ts
+src/core/demo-approval.ts
+src/browser/task-router.ts
+src/browser/dashboard-controller.ts
+src/browser/main.ts
+```
+
+The earlier Phase 0–3 ACME mock workflow remains in the repository as Node/browser regression coverage and portability proof. It is no longer the browser Business World SSOT.
+
+## IndexedDB schema
+
+Database:
+
+```text
+digital-employee-dashboard-v1
+DB version: 2
+```
+
+Business stores:
+
+- `meta`
+- `customers`
+- `invoices`
+- `payments`
+- `creditNotes`
+- `followUpPolicies`
+
+Work/audit stores:
+
+- `tasks`
+- `taskEvents`
+- `approvals`
+- `inbox`
+- `evidence`
+- `draftActions`
+
+Business entities are not duplicated into each task. Tasks contain task-level summary/status; detailed execution evidence is stored separately.
+
+## Demo seed pack
+
+`demo-business-v1` currently seeds approximately:
+
+- 17 canonical customers plus a legacy duplicate row
+- 44 invoices
+- 23 payments
+- 7 credit notes
+- 6 follow-up policies
+- 5 seeded inbox/exception items
+- 3 launchable approval scenarios
+
+Included business cases:
+
+- fully paid accounts
+- partial payments
+- 45+ day overdue invoices
+- future/upcoming due invoices
+- credit notes
+- duplicate invoice/payment imports
+- unmatched payment
+- ambiguous customer identity (`Twin`)
+- credit-limit exposure
+- invoice dispute
+- customers with zero action required
+
+ACME is preserved for regression compatibility. It still reconciles to three open invoices and SGD 14,520 in the fixed seed, but those fixture values are not runtime completion rules.
+
+## Supported capabilities
+
+The browser task router supports:
+
+- `customer.lookup`
+- `receivables.review`
+- `payments.reconcile`
+- `followup.prepare`
+- `exceptions.review`
+- `portfolio.overdue`
+- `daily.brief`
+
+Examples:
+
+```text
+Review ACME receivables.
+Check Beacon receivables.
+Show overdue customers.
+Which customers owe us the most?
+Investigate unmatched payments.
+Resolve ambiguous customer.
+Review today's exceptions.
+Prepare today's brief.
+```
+
+A uniquely resolved customer executes. An ambiguous or missing customer becomes `Needs Review`. Unsupported work is `Blocked` before business execution; it is not silently reinterpreted as a failed customer lookup.
+
+## Portfolio work
+
+`portfolio.overdue` works across the company rather than a single customer. It produces:
+
+- total overdue customers
+- total overdue amount
+- highest-priority accounts
+- upcoming-due accounts
+- exceptions requiring review
+
+This is derived from the seeded business stores at runtime.
+
+## Task event ledger
+
+Task history uses event-based lifecycle records such as:
+
+```text
+CREATED
+ROUTED
+STARTED
+CUSTOMER_RESOLVED
+CAPABILITY_STARTED
+CAPABILITY_COMPLETED
+VERIFYING
+NEEDS_REVIEW
+NEEDS_APPROVAL
+APPROVED
+REJECTED
+RESUMED
+COMPLETED
+FAILED
+```
+
+Current Activity and History are projections of these events where applicable. Evidence is kept separately from the task record.
+
+## Verification
+
+Business completion is verification-gated. The LLM cannot declare a task complete.
+
+Runtime checks include business invariants such as:
+
+- unique customer identity
+- reviewed records match the resolved customer
+- invoice count consistency
+- outstanding-total reconciliation
+- non-negative balances
+- currency consistency
+- duplicate suppression
+- canonical payments
+- follow-up coverage
+- follow-up amount equals the corresponding outstanding balance
+- portfolio totals/count consistency
+
+Fixed fixture expectations such as ACME's `3` invoices / `SGD 14,520` remain Golden Oracle/test data only.
+
+## Approval simulation
+
+Approval scenarios are explicitly labelled:
+
+- `Local Demo Simulation`
+- `No external system changed`
+
+A pending approval pauses the task. Approve & Resume:
+
+1. records `APPROVED`
+2. records `RESUMED`
+3. creates a local `draftActions` record
+4. resumes the repository-backed workflow
+5. runs deterministic verification
+6. records evidence/result
+
+Reject marks the task blocked, records `REJECTED`, stores rejection evidence, and performs no business execution.
+
+Current scenario library includes ACME, Bright Star high-value, and Riverside dispute approval examples.
+
+## Inbox
+
+Inbox items are real local work-queue records with:
+
+- type
+- severity
+- related entity
+- status
+- title/detail
+- resolution
+
+Supported lifecycle:
+
+```text
+Open → Investigate → Resolve
+                   ↘ Escalate
+```
+
+Seeded examples include unmatched payment, duplicate payment, invoice dispute, credit-limit exposure, and ambiguous identity. Runtime review/approval tasks can add additional inbox items.
+
+## Dashboard semantics
+
+Home separates two different concepts.
+
+### Employee Activity
+
+- Tasks completed
+- Customers handled
+- Pending approvals
+- Need attention
+
+These remain zero for completed work on a fresh visitor until the user actually assigns something.
+
+### Business Snapshot
+
+- Open receivables
+- Overdue invoices
+- Customers at risk
+- Exceptions
+
+These may be non-zero immediately because the fictional company is already seeded.
+
+## Scenario library
+
+Scenario buttons only populate the composer. They never execute automatically.
+
+Categories:
+
+- Normal Work
+- Exception
+- Approval
+
+The user must still press Assign.
+
+## Customers and History
+
+Customers is backed by IndexedDB and supports:
+
+- search/list
+- account summary
+- invoices
+- payments
+- risk/credit limit
+- related tasks
+
+History is persistent and supports task status plus event-timeline inspection. Result, verification, and evidence remain available through the task detail/trust UI after refresh.
+
+## Reset and migration
+
+Three actions are intentionally separate:
+
+- **Clear task history** — clears tasks/events/approvals/evidence/drafts and runtime-created inbox items; seeded business data remains.
+- **Restore sample business data** — restores deterministic business entities and seeded exception records while preserving task history.
+- **Reset entire demo** — clears all local demo stores and recreates the deterministic seed with zero task history.
+
+Migration supports both prior persisted formats:
+
+- legacy `localStorage` ledger
+- previous IndexedDB v1 `dashboard-state / ledger`
+
+Valid legacy task/history data is migrated into separated v2 stores before the old ledger record/key is removed. Migrated browsers may retain the now-empty legacy object-store shell until a future DB version upgrade; fresh v2 databases contain only current Business World stores.
+
+## Demo Gateway security boundary
+
+The Demo Gateway bearer token remains memory-only.
+
+It is never written to:
+
+- IndexedDB
+- localStorage
+- sessionStorage
+- source code
+- Git history
+
+The Gateway is used only after deterministic verification passes and only to summarize already-verified facts.
+
+## Mobile and accessibility
+
+- SVG-only UI icons
+- `system-ui` font stack; no external font CDN/files
+- 12px visible metadata floor, 14–16px normal UI/body scale
+- bottom navigation on mobile
+- employee trust rail becomes a bottom-sheet drawer
+- My Work becomes task cards on mobile
+- Scenario Library becomes a horizontal scroller
+- Customers/History are compact on mobile and expand on demand
+- visible interactive targets target at least 44px
+- skip link + `:focus-visible`
+- Escape closes the trust drawer
+- no horizontal overflow at 390×844
 
 ## Commands
 
 ```bash
 npm install
-npm run demo:node
 npm test
 npm run build
 npm run dev
 ```
 
-Expected business result in both runtimes:
+The older Pi portability proof can still be run with:
 
-- Customer: ACME Trading Pte Ltd
-- Outstanding invoices: 3
-- Outstanding total: SGD 14,520
-- Verification: PASS
+```bash
+npm run demo:node
+```
 
-## Phase 2
+## Production-demo boundary
 
-`createMockBusinessApi()` exposes a fixed, validated dataset with paid, outstanding, overdue, future-due, partial-payment, credit-note, and duplicate-record scenarios. `createOperationsRuntime()` registers `customer.lookup`, `invoice.review`, `payment.list`, and `follow-up.evaluate` identically for Node and browsers. The fixed review date keeps results repeatable: ACME has three outstanding invoices totaling SGD 14,520 after canonical payments and credits are applied.
+This is a static public demo, not a production ERP employee.
 
-## Phase 2 boundary
+Not connected / not claimed:
 
-Included: the Phase 0/1 behavior, Employee Core contracts, capability registry, mock business data/API, deterministic follow-up policies, operations-assistant definition, and Node/browser regression coverage.
+- server-side database
+- real Globe3 ERP write access
+- Gmail sending
+- cross-device task synchronization
+- production identity/RBAC
+- external approval execution
+- production credentials
 
-Not included: ERP integration, BYOK, server-side durable persistence, production approvals, scheduling, multi-agent, email sending, long-term employee memory, or production credentials.
-
-
-## Phase 3
-
-`runOperationsEmployeeTask()` is the shared runtime-neutral Digital Employee workflow used by both Node and browser runtimes. It creates the task, executes `customer.lookup`, `invoice.review`, `payment.list`, and `follow-up.evaluate`, records evidence, enters `VERIFYING`, and allows `COMPLETED` only when deterministic verification passes. Missing or ambiguous customer identity becomes `NEEDS_REVIEW`; execution failures become `FAILED`.
-
-The public browser LLM integration is isolated in `src/shared/demo-gateway-client.ts`. Before any model request it creates a short-lived session from `https://gpt.yapweijun1996.com/demo/session` for project `github-pages`, keeps the bearer token in memory only, then calls only the public `/demo/v1/chat/completions` path. It never requires or accepts a provider API key. A 401 causes one session refresh and one retry; 403 and 429 are surfaced without aggressive retry. The LLM gateway does not decide Phase 3 verification or task completion.
-
-## Dashboard V1
-
-The public browser demo now presents the runtime as a work-first Digital Employee workspace rather than a chatbot. The employee identity is **Alex · Operations Employee**. The Home dashboard exposes task assignment, session KPIs, My Work, Inbox, Approvals, Today's Brief, Current Activity, Employee Status, Connections, verified business results, and collapsible technical evidence. Real integrations are not faked: Browser and Demo Gateway are available, Business Data is explicitly marked Demo, while Globe3 ERP and Gmail remain Not connected.
-
-The product UX keeps three trust layers separate: **Business Result → Verification → Technical Evidence**. The LLM can summarize a verified result but still cannot declare business completion.
-
-## Typography and layout SSOT
-
-The dashboard uses the browser/OS built-in `system-ui` stack and ships no font files, font CDN, or icon font. This avoids adding a font asset/license dependency to the project. If a bundled font is introduced later, it must be open-source; prefer MIT when available and otherwise require an explicitly approved open font license.
-
-Readable type scale:
-
-- 12px: metadata, badges, developer/audit secondary text — absolute visual floor.
-- 14px: standard UI text, navigation, tables, activity, checks, buttons.
-- 16px: body default, task input, primary readable content.
-- 18px: section/card headings.
-- 20px: reserved medium heading token.
-- 24px: KPI values.
-- 32px: desktop page heading; 28px on mobile.
-
-Layout scale:
-
-- Wide desktop: 240px sidebar / flexible main / 360px employee rail.
-- Compact desktop (<=1280px): 220px sidebar / flexible main / 330px rail.
-- <=1120px: employee rail moves below the main workspace.
-- <=760px: single-column mobile layout with no horizontal overflow.
-
-Do not introduce visible UI text below 12px. Keep spacing, row heights, card padding, and column widths aligned with the typography scale rather than shrinking text to make content fit.
-
-## Dashboard V1 behavior contract
-
-The public dashboard is deliberately work-first and user-triggered:
-
-- Fresh browser storage starts at `0 tasks`, `Ready`, and does not run ACME or call the Demo Gateway on page load.
-- Quick actions are composer suggestions only. The user must explicitly press Assign.
-- New Task clears the composer and selected task detail while preserving the demo ledger/history.
-- The V1 capability router accepts only ACME receivables work, the explicitly labelled unknown-customer exception test, and the explicitly labelled approval demo. Unsupported tasks are blocked before business execution or any model request.
-- Search, Settings, and unimplemented sidebar destinations are not shown as fake controls.
-- The fixed business fixture is labelled `Demo dataset · Snapshot 1 Mar 2025 · Read-only fixture`.
-
-### Verification versus demo oracle
-
-`DEMO_ORACLE` records fixture acceptance expectations such as ACME's 3 outstanding invoices and SGD 14,520 total. Those values are test/oracle data, not workflow completion rules. Runtime completion uses business invariants: customer identity consistency, outstanding count/total reconciliation, non-negative balances, currency consistency, canonical duplicate suppression, follow-up coverage and amount consistency, and canonical payments.
-
-### Demo approval flow
-
-`Demo approval flow` is explicitly marked as a Demo Scenario. It pauses a task as `Needs Approval`, shows what/why/affected data/business impact, and supports Approve & Resume or Reject. Approval never writes to ERP, Gmail, credit limits, or any external business source.
-
-### Demo ledger and KPI semantics
-
-Task history is persisted in browser IndexedDB under a versioned demo ledger so reloads preserve work history without treating localStorage as the durable store. Existing V1 localStorage ledger data is migrated once into IndexedDB and the legacy key is then removed. The Demo Gateway bearer token remains memory-only and is never written to IndexedDB or localStorage. The dashboard provides a Clear demo history action.
-
-KPI semantics are intentional:
-
-- completed task throughput counts repeated completed tasks;
-- customers handled is unique by customer;
-- outstanding reviewed is unique by customer + dataset snapshot, so repeating the same ACME review does not double-count SGD 14,520;
-- need attention counts unresolved inbox items plus pending approvals.
-
-### Mobile hierarchy and accessibility
-
-At mobile widths the desktop sidebar becomes a bottom navigation with Home, Work, Inbox, Approvals, and More. Employee status, connections, verification, and evidence live in a bottom-sheet trust drawer rather than extending the page. My Work renders task cards with context and progress instead of hiding table columns. Visible mobile controls target at least 44px. A skip link, `:focus-visible`, Escape-to-close drawer behavior, and keyboard focus transfer are part of the contract.
+Local IndexedDB is the Business World V1 SSOT. A future real-business pilot can replace the repository adapters while preserving the employee/task/verification contracts.
