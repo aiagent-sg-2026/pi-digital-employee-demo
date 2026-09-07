@@ -39,3 +39,112 @@ describe("Business World migration and work queue",()=>{
 it("keeps approval resume event order monotonic through completed workflow",async()=>{await initializeBusinessWorld();const business=new IndexedDbBusinessRepository(),work=new IndexedDbWorkRepository();const {createLocalDemoApproval,approveLocalDemo}=await import("../src/core/demo-approval");const created=await createLocalDemoApproval(work,{title:"Approval resume order",customerQuery:"ACME",snapshotLabel:"Snapshot 1 Mar 2025"});await approveLocalDemo(work,created.approval.id);await runBusinessWorldTask(business,work,{taskId:created.task.id,title:created.task.title,intent:"followup.prepare",customerQuery:"ACME"});const types=(await work.listTaskEvents(created.task.id)).map(e=>e.type);const approved=types.indexOf("APPROVED"),resumed=types.indexOf("RESUMED"),routed=types.lastIndexOf("ROUTED"),started=types.lastIndexOf("STARTED"),completed=types.lastIndexOf("COMPLETED");expect(approved).toBeLessThan(resumed);expect(resumed).toBeLessThan(routed);expect(routed).toBeLessThan(started);expect(started).toBeLessThan(completed);});
 
 it("runs Beacon workflow, handles customer-not-found, and verifies duplicate suppression",async()=>{await initializeBusinessWorld();const business=new IndexedDbBusinessRepository(),work=new IndexedDbWorkRepository();const beacon=await runBusinessWorldTask(business,work,{title:"Check Beacon receivables",intent:"receivables.review",customerQuery:"Beacon"});expect(beacon.task.status).toBe("completed");expect((beacon.summary.customer as any).name).toBe("Beacon Retail Pte Ltd");const missing=await runBusinessWorldTask(business,work,{title:"Review Ghost receivables",intent:"receivables.review",customerQuery:"Ghost"});expect(missing.task.status).toBe("needs-review");expect(missing.verification.checks[0]?.id).toBe("customer.identity.unique");const acme=await runBusinessWorldTask(business,work,{title:"Review ACME",intent:"receivables.review",customerQuery:"ACME"});expect(acme.verification.checks.find(c=>c.id==="duplicates.suppressed")?.passed).toBe(true);});
+
+describe("Recoverable human review",()=>{
+  it("resolves ambiguous customer on the same task and resumes receivables verification",async()=>{
+    await initializeBusinessWorld();
+    const business=new IndexedDbBusinessRepository(),work=new IndexedDbWorkRepository();
+    const initial=await runBusinessWorldTask(business,work,{title:"Resolve ambiguous customer",intent:"receivables.review",customerQuery:"Twin"});
+    expect(initial.task.status).toBe("needs-review");
+    expect(initial.task.review?.candidateCustomerIds).toEqual(expect.arrayContaining(["customer-twin-north","customer-twin-south"]));
+    const {resolveAmbiguousCustomerReview}=await import("../src/core/business-world-workflow");
+    const resumed=await resolveAmbiguousCustomerReview(business,work,initial.task.id,"customer-twin-north");
+    expect(resumed.task.id).toBe(initial.task.id);
+    expect(resumed.task.status).toBe("completed");
+    expect(resumed.task.customerId).toBe("customer-twin-north");
+    expect(resumed.verification.status).toBe("PASS");
+    expect((resumed.summary.customer as any).name).toBe("Twin North Trading Pte Ltd");
+    const events=(await work.listTaskEvents(initial.task.id)).map(event=>event.type);
+    expect(events).toContain("NEEDS_REVIEW");
+    expect(events).toContain("REVIEW_RESOLVED");
+    expect(events.indexOf("NEEDS_REVIEW")).toBeLessThan(events.indexOf("REVIEW_RESOLVED"));
+    expect(events.indexOf("REVIEW_RESOLVED")).toBeLessThan(events.lastIndexOf("COMPLETED"));
+  });
+
+  it("deduplicates repeated unresolved ambiguity by stable issue identity",async()=>{
+    await initializeBusinessWorld();
+    const business=new IndexedDbBusinessRepository(),work=new IndexedDbWorkRepository();
+    await runBusinessWorldTask(business,work,{title:"Resolve ambiguous customer one",intent:"receivables.review",customerQuery:"Twin"});
+    const afterOne=(await work.listInbox()).filter(item=>item.issueKey==="ambiguous-customer:twin"&&item.status!=="resolved");
+    await runBusinessWorldTask(business,work,{title:"Resolve ambiguous customer two",intent:"receivables.review",customerQuery:"Twin"});
+    const afterTwo=(await work.listInbox()).filter(item=>item.issueKey==="ambiguous-customer:twin"&&item.status!=="resolved");
+    expect(afterOne).toHaveLength(1);
+    expect(afterTwo).toHaveLength(1);
+    expect(afterTwo[0]?.relatedTaskIds).toHaveLength(2);
+  });
+});
+
+describe("Domain-specific Inbox resolution",()=>{
+  it("suppresses a duplicate payment locally and records task evidence",async()=>{
+    await initializeBusinessWorld();
+    const business=new IndexedDbBusinessRepository(),work=new IndexedDbWorkRepository();
+    const investigation=await runBusinessWorldTask(business,work,{title:"Investigate unmatched payments",intent:"payments.reconcile"});
+    const issue=(await work.listInbox()).find(item=>item.type==="duplicate-payment")!;
+    expect(issue.relatedTaskIds).toContain(investigation.task.id);
+    const {suppressDuplicatePaymentLocally}=await import("../src/core/inbox-resolution");
+    await suppressDuplicatePaymentLocally(business,work,issue.id);
+    expect((await business.getPayment(issue.relatedEntityId))?.suppressed).toBe(true);
+    expect((await work.listInbox()).find(item=>item.id===issue.id)?.status).toBe("resolved");
+    expect((await work.listTaskEvents(investigation.task.id)).some(event=>event.type==="ISSUE_RESOLVED")).toBe(true);
+    expect((await work.listEvidence(investigation.task.id)).some(evidence=>evidence.type==="inbox.resolution")).toBe(true);
+  });
+
+  it("maps an unmatched payment to an existing invoice locally",async()=>{
+    await initializeBusinessWorld();
+    const business=new IndexedDbBusinessRepository(),work=new IndexedDbWorkRepository();
+    const investigation=await runBusinessWorldTask(business,work,{title:"Investigate unmatched payments",intent:"payments.reconcile"});
+    const issue=(await work.listInbox()).find(item=>item.type==="unmatched-payment")!;
+    const acme=(await business.findCustomer("ACME")).canonical[0]!;
+    const target=(await business.listInvoicesByCustomer(acme.id)).find(invoice=>invoice.status==="open")!;
+    const {mapUnmatchedPaymentLocally}=await import("../src/core/inbox-resolution");
+    await mapUnmatchedPaymentLocally(business,work,issue.id,target.id);
+    const payment=await business.getPayment(issue.relatedEntityId);
+    expect(payment).toMatchObject({status:"matched",customerId:acme.id,invoiceId:target.id});
+    expect((await work.listInbox()).find(item=>item.id===issue.id)?.status).toBe("resolved");
+    expect((await work.listTaskEvents(investigation.task.id)).some(event=>event.type==="ISSUE_RESOLVED")).toBe(true);
+    const duplicate=(await work.listInbox()).find(item=>item.type==="duplicate-payment")!;
+    const {suppressDuplicatePaymentLocally}=await import("../src/core/inbox-resolution");
+    await suppressDuplicatePaymentLocally(business,work,duplicate.id);
+    expect((await work.getTask(investigation.task.id))?.outcome).toBe("completed-resolved");
+  });
+
+  it("converts a credit-limit issue into one manager approval action identity",async()=>{
+    await initializeBusinessWorld();
+    const business=new IndexedDbBusinessRepository(),work=new IndexedDbWorkRepository();
+    const {countActionableIssues}=await import("../src/browser/dashboard-projection");
+    const before=countActionableIssues(await work.listInbox(),await work.listApprovals());
+    const issue=(await work.listInbox()).find(item=>item.type==="credit-limit")!;
+    const {requestManagerApprovalForIssue}=await import("../src/core/inbox-resolution");
+    const created=await requestManagerApprovalForIssue(business,work,issue.id,"Snapshot 1 Mar 2025");
+    const afterInbox=await work.listInbox(),afterApprovals=await work.listApprovals();
+    expect((afterInbox.find(item=>item.id===issue.id))?.status).toBe("resolved");
+    const approval=afterApprovals.find(item=>item.id===created.approvalId)!;
+    const approvalInbox=afterInbox.find(item=>item.relatedEntityId===created.approvalId)!;
+    expect(approval.issueKey).toBe(issue.issueKey);
+    expect(approvalInbox.issueKey).toBe(issue.issueKey);
+    expect(countActionableIssues(afterInbox,afterApprovals)).toBe(before);
+  });
+
+  it("counts a new explicit approval only once across Approval and Inbox",async()=>{
+    await initializeBusinessWorld();
+    const work=new IndexedDbWorkRepository();
+    const {countActionableIssues}=await import("../src/browser/dashboard-projection");
+    expect(countActionableIssues(await work.listInbox(),await work.listApprovals())).toBe(5);
+    const {createLocalDemoApproval}=await import("../src/core/demo-approval");
+    await createLocalDemoApproval(work,{title:"New approval",customerQuery:"ACME",snapshotLabel:"Snapshot 1 Mar 2025"});
+    expect(countActionableIssues(await work.listInbox(),await work.listApprovals())).toBe(6);
+  });
+});
+
+it("clear task history removes task-generated Inbox links but preserves seeded issues",async()=>{
+  await initializeBusinessWorld();
+  const business=new IndexedDbBusinessRepository(),work=new IndexedDbWorkRepository();
+  await runBusinessWorldTask(business,work,{title:"Investigate unmatched payments",intent:"payments.reconcile"});
+  expect((await work.listInbox()).some(item=>item.seeded&&(item.relatedTaskIds?.length??0)>0)).toBe(true);
+  const {clearTaskHistory}=await import("../src/data/indexeddb");
+  await clearTaskHistory();
+  const seeded=(await work.listInbox()).filter(item=>item.seeded);
+  expect(seeded).toHaveLength(5);
+  expect(seeded.every(item=>(item.relatedTaskIds?.length??0)===0)).toBe(true);
+  expect(await work.listTaskHistory()).toHaveLength(0);
+});

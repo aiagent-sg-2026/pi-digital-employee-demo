@@ -7,6 +7,7 @@ export * from "./mock-business-data";
 export * from "./operations-capabilities";
 export * from "./task-state";
 export { operationsAssistant } from "./operations-assistant";
-export { runBusinessWorldTask, reviewCustomer } from "./business-world-workflow";
+export { runBusinessWorldTask, reviewCustomer, resolveAmbiguousCustomerReview, ambiguousCustomerIssueKey } from "./business-world-workflow";
 export type { BusinessWorldIntent, BusinessWorldTaskInput, BusinessWorldResult } from "./business-world-workflow";
 export { createLocalDemoApproval, approveLocalDemo, rejectLocalDemo } from "./demo-approval";
+export { suppressDuplicatePaymentLocally, mapUnmatchedPaymentLocally, dismissUnmatchedPaymentLocally, acknowledgeInvoiceDispute, escalateInboxIssue, requestManagerApprovalForIssue } from "./inbox-resolution";

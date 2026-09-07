@@ -17,7 +17,8 @@ export function routeDashboardTask(task:string):RoutedTask{
   if(/exception/.test(lower))return{intent:"exceptions.review",context:"Business exception queue"};
   if(/unmatched payment|duplicate payment|reconcile payments|payment reconciliation/.test(lower))return{intent:"payments.reconcile",context:"Payment reconciliation queue"};
   if(/follow[- ]?up/.test(lower)){const query=customerFrom(text);return{intent:"followup.prepare",customerQuery:query,context:query?`${query} account`:"Customer follow-up"};}
-  if(/find customer|lookup customer|customer lookup|resolve ambiguous customer/.test(lower)){const query=/ambiguous/.test(lower)?"Twin":customerFrom(text);return{intent:"customer.lookup",customerQuery:query,context:query?`${query} customer lookup`:"Customer lookup"};}
+  if(/resolve ambiguous customer/.test(lower))return{intent:"receivables.review",customerQuery:"Twin",context:"Twin customer clarification"};
+  if(/find customer|lookup customer|customer lookup/.test(lower)){const query=customerFrom(text);return{intent:"customer.lookup",customerQuery:query,context:query?`${query} customer lookup`:"Customer lookup"};}
   if(/receivable|outstanding|invoice|account/.test(lower)){const query=customerFrom(text);return query?{intent:"receivables.review",customerQuery:query,context:`${query} account`}:{intent:"unsupported",context:"Customer required",reason:`A customer name/code is required. ${SUPPORTED}`};}
   return{intent:"unsupported",context:"Unsupported demo capability",reason:SUPPORTED};
 }

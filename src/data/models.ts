@@ -43,6 +43,7 @@ export interface BusinessPayment {
   currency: DemoCurrency;
   status: "matched" | "unmatched";
   duplicateOf?: string;
+  suppressed?: boolean;
 }
 
 export interface BusinessCreditNote {
@@ -70,10 +71,12 @@ export type InboxStatus = "open" | "investigating" | "resolved" | "escalated";
 
 export interface BusinessInboxItem {
   id: string;
+  issueKey?: string;
   type: InboxType;
   severity: "info" | "warning" | "critical";
   relatedEntityType: "customer" | "invoice" | "payment" | "approval";
   relatedEntityId: string;
+  relatedTaskIds?: string[];
   createdAt: string;
   status: InboxStatus;
   title: string;
@@ -83,6 +86,14 @@ export interface BusinessInboxItem {
 }
 
 export type TaskStatus = "created" | "running" | "needs-review" | "needs-approval" | "completed" | "failed" | "blocked";
+export type TaskOutcome = "completed-no-action" | "completed-attention-required" | "completed-resolved";
+export interface TaskReview {
+  type: "ambiguous-customer";
+  query: string;
+  candidateCustomerIds: string[];
+  selectedCustomerId?: string;
+  resolvedAt?: string;
+}
 export interface BusinessTask {
   id: string;
   title: string;
@@ -94,10 +105,12 @@ export interface BusinessTask {
   updatedAt: string;
   summary?: Record<string, unknown>;
   verification?: { status: "PASS" | "NEEDS_REVIEW" | "FAIL"; passed: number; total: number };
+  outcome?: TaskOutcome;
+  review?: TaskReview;
   approvalId?: string;
 }
 
-export type TaskEventType = "CREATED" | "ROUTED" | "STARTED" | "CUSTOMER_RESOLVED" | "CAPABILITY_STARTED" | "CAPABILITY_COMPLETED" | "VERIFYING" | "NEEDS_REVIEW" | "NEEDS_APPROVAL" | "APPROVED" | "REJECTED" | "RESUMED" | "COMPLETED" | "FAILED";
+export type TaskEventType = "CREATED" | "ROUTED" | "STARTED" | "CUSTOMER_RESOLVED" | "CAPABILITY_STARTED" | "CAPABILITY_COMPLETED" | "VERIFYING" | "NEEDS_REVIEW" | "REVIEW_RESOLVED" | "NEEDS_APPROVAL" | "APPROVED" | "REJECTED" | "RESUMED" | "ISSUE_RESOLVED" | "COMPLETED" | "FAILED";
 export interface TaskEvent {
   id: string;
   taskId: string;
@@ -109,6 +122,7 @@ export interface TaskEvent {
 
 export interface BusinessApproval {
   id: string;
+  issueKey?: string;
   taskId: string;
   state: "pending" | "approved" | "rejected";
   title: string;

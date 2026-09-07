@@ -1,11 +1,14 @@
 import { DEMO_SNAPSHOT_DATE } from "../demo/seed";
-import { STORES, getAllByIndex, getAllRecords, getRecord } from "./indexeddb";
+import { STORES, getAllByIndex, getAllRecords, getRecord, putRecord } from "./indexeddb";
 import type { BusinessCreditNote, BusinessCustomer, BusinessException, BusinessFollowUpPolicy, BusinessInboxItem, BusinessInvoice, BusinessPayment, BusinessSnapshot } from "./models";
 
 const norm=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,"");
 export interface BusinessRepository {
   findCustomer(query:string):Promise<{records:BusinessCustomer[];canonical:BusinessCustomer[]}>;
   getCustomer(id:string):Promise<BusinessCustomer|undefined>;
+  getInvoice(id:string):Promise<BusinessInvoice|undefined>;
+  getPayment(id:string):Promise<BusinessPayment|undefined>;
+  savePayment(payment:BusinessPayment):Promise<void>;
   listCustomers():Promise<BusinessCustomer[]>;
   listInvoicesByCustomer(customerId:string):Promise<BusinessInvoice[]>;
   listPaymentsByCustomer(customerId:string):Promise<BusinessPayment[]>;
@@ -18,6 +21,9 @@ export interface BusinessRepository {
 export class IndexedDbBusinessRepository implements BusinessRepository {
   async findCustomer(query:string){const needle=norm(query);const all=await getAllRecords<BusinessCustomer>(STORES.customers);const records=all.filter(c=>[c.code,c.name,...c.aliases].some(v=>norm(v).includes(needle)));const ids=new Set(records.map(c=>c.duplicateOf??c.id));const canonical=all.filter(c=>ids.has(c.id)&&!c.duplicateOf);return{records,canonical};}
   getCustomer(id:string){return getRecord<BusinessCustomer>(STORES.customers,id)}
+  getInvoice(id:string){return getRecord<BusinessInvoice>(STORES.invoices,id)}
+  getPayment(id:string){return getRecord<BusinessPayment>(STORES.payments,id)}
+  savePayment(payment:BusinessPayment){return putRecord(STORES.payments,payment)}
   async listCustomers(){return (await getAllRecords<BusinessCustomer>(STORES.customers)).filter(c=>!c.duplicateOf).sort((a,b)=>a.name.localeCompare(b.name));}
   async listInvoicesByCustomer(customerId:string){return (await getAllByIndex<BusinessInvoice>(STORES.invoices,"customerId",customerId)).filter(i=>!i.duplicateOf);}
   async listPaymentsByCustomer(customerId:string){return (await getAllByIndex<BusinessPayment>(STORES.payments,"customerId",customerId)).filter(p=>!p.duplicateOf);}

@@ -254,6 +254,26 @@ Open → Investigate → Resolve
 
 Seeded examples include unmatched payment, duplicate payment, invoice dispute, credit-limit exposure, and ambiguous identity. Runtime review/approval tasks can add additional inbox items.
 
+### Recoverable human review and issue identity
+
+`Needs Review` is recoverable work, not a terminal demo state. Ambiguous customer reviews persist candidate customer IDs on the original task. The manager sees human-readable candidate cards with customer name, code, risk and outstanding balance. Selecting a candidate records `REVIEW_RESOLVED`, stores the chosen canonical customer, resumes the **same task ID**, reruns receivables work, and reaches deterministic verification. The complete pre-review and post-review event timeline remains inspectable.
+
+Inbox records use stable `issueKey` identities plus `relatedTaskIds`. Repeating the same unresolved ambiguity updates the existing actionable item rather than inserting unbounded duplicates. Approval records and their approval-required Inbox item share the same issue identity, so `Need attention` counts a manager action once rather than counting both UI representations.
+
+Inbox resolution is domain-specific and always local-only:
+
+- ambiguous customer → select canonical customer and resume the related task;
+- duplicate payment → suppress the duplicate import record locally;
+- unmatched payment → map to an existing invoice/customer, dismiss, or escalate;
+- invoice dispute → acknowledge, escalate, or request manager review;
+- credit-limit exception → convert the issue into a local approval workflow.
+
+Every local resolution can append task event/evidence records. No action writes to Globe3 ERP, Gmail, a bank, or any external business system.
+
+### Task outcome versus issue resolution
+
+Task execution and business issue resolution are projected separately. A successful payment/exception investigation may be `Investigation completed · Action required` while the discovered Inbox issues remain open. When all related issues are resolved locally, the task can project `Completed · Resolved`. This prevents a green task-completion state from implying that every underlying business issue has been resolved.
+
 ## Dashboard semantics
 
 Home separates two different concepts.
