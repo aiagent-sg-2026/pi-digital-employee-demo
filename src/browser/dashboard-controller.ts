@@ -28,10 +28,10 @@ const briefTitle=$<HTMLElement>("#brief-title"), briefCopy=$<HTMLElement>("#brie
 const customerSearch=$<HTMLInputElement>("#customer-search"), customerList=$<HTMLElement>("#customer-list"), customerDetail=$<HTMLElement>("#customer-detail"), historyList=$<HTMLElement>("#history-list");
 const trustDrawer=$<HTMLElement>("#trust-drawer"), drawerOverlay=$<HTMLElement>("#drawer-overlay"), openTrustDrawerButton=$<HTMLButtonElement>("#open-trust-drawer"), closeTrustDrawerButton=$<HTMLButtonElement>("#close-trust-drawer");
 const datasetSnapshot=$<HTMLElement>("#dataset-snapshot"), businessDataDetail=$<HTMLElement>("#business-data-detail");
-const workStatusFilter=$<HTMLSelectElement>("#work-status-filter"), inboxStatusFilter=$<HTMLSelectElement>("#inbox-status-filter"), inboxSeverityFilter=$<HTMLSelectElement>("#inbox-severity-filter"), inboxTypeFilter=$<HTMLSelectElement>("#inbox-type-filter");
+const workStatusFilter=$<HTMLSelectElement>("#work-status-filter"), workCustomerFilter=$<HTMLSelectElement>("#work-customer-filter"), inboxStatusFilter=$<HTMLSelectElement>("#inbox-status-filter"), inboxSeverityFilter=$<HTMLSelectElement>("#inbox-severity-filter"), inboxTypeFilter=$<HTMLSelectElement>("#inbox-type-filter");
 const taskTabs=$<HTMLElement>("#task-tabs"), taskTimelinePanel=$<HTMLElement>("#task-timeline-panel"), taskVerificationPanel=$<HTMLElement>("#task-verification-panel"), taskEvidencePanel=$<HTMLElement>("#task-evidence-panel"), taskIssuesPanel=$<HTMLElement>("#task-issues-panel"), taskApprovalPanel=$<HTMLElement>("#task-approval-panel");
 const approvalDetail=$<HTMLElement>("#approval-detail"), capabilitiesGrid=$<HTMLElement>("#capabilities-grid"), connectionsPageBody=$<HTMLElement>("#connections-page-body");
-const settingsAppVersion=$<HTMLElement>("#settings-app-version"), languageSelect=$<HTMLSelectElement>("#language-select");
+const settingsAppVersion=$<HTMLElement>("#settings-app-version"), languageSelect=$<HTMLSelectElement>("#language-select"), taskTrustSummary=$<HTMLElement>("#task-trust-summary");
 
 const business=new IndexedDbBusinessRepository(); const work=new IndexedDbWorkRepository(); const gateway=createDemoGatewayClient({origin:window.location.origin});
 let running=false; let latestEvidence=""; let tasks:BusinessTask[]=[]; let inbox:BusinessInboxItem[]=[]; let approvals:BusinessApproval[]=[]; let currentRoute:AppRoute=parseHash("#/home"); let pendingSuggestion:{canonical:string;display:string}|null=null;
@@ -60,6 +60,8 @@ function setSuggestedTask(canonical:string,feedbackKey:string){const display=loc
 const money=(n:number)=>formatMoney(n,"SGD");
 const dateLabel=()=>formatDate(DEMO_SNAPSHOT_DATE);
 const outcomeLabel=(task:BusinessTask)=>t(taskOutcomeKey(task));
+const workCountLabel=(count:number)=>t(count===1?"work.taskCountOne":"work.taskCountMany",{count});
+const historyCountLabel=(count:number)=>t(count===1?"history.taskCountOne":"history.taskCountMany",{count});
 const riskLabel=(risk:string)=>t(`common.risk.${risk}`);
 const invoiceStatusLabel=(status:string)=>t(`common.invoice.${status}`);
 const paymentStatusLabel=(status:string)=>t(`common.payment.${status}`);
@@ -70,18 +72,27 @@ const verificationLabel=(id:string)=>{const key=`verification.check.${id}`;const
 const activityLabel=(type:string,message:string)=>{const key=`task.event.${type}`;const value=t(key);return value===key?message:value;};
 function setEmployeeMode(mode:string){const key=mode==="Working"?"common.working":mode==="Waiting on manager"?"common.waitingManager":"common.available";employeeMode.textContent=t(key);lastUpdated.textContent=formatTime(new Date());}
 function setDetail(task?:BusinessTask){if(!task){detailState.textContent=t("outcome.ready");detailState.className="status-chip running";return;}detailState.textContent=outcomeLabel(task);detailState.className=`status-chip ${taskOutcomeClass(task)}`;}
-function resetWorkspace(clearComposer=true,focus=clearComposer){if(clearComposer){taskInput.value="";pendingSuggestion=null;}composerFeedback.textContent="";setDetail();businessMeta.textContent=t("task.noVerified");businessResult.innerHTML=`<p class="approval-empty">${esc(t("task.assignForResult"))}</p>`;verificationCount.textContent="0 / 0";verificationList.innerHTML=`<li><span class="check-icon">${svgIcon("circle")}</span><div>${esc(t("verification.waiting"))}</div></li>`;rawEvidence.textContent="";latestEvidence="";evidenceDetails.open=false;aiSummary.textContent=t("task.summaryAfterVerify");gatewayStatus.textContent=t("task.gatewayNotCalled");currentActivity.innerHTML=`<li><span class="activity-icon idle">${svgIcon("circle")}</span><div class="activity-copy"><strong>${esc(t("rail.waitingWork"))}</strong><small>${esc(t("rail.assignTask"))}</small></div></li>`;setEmployeeMode("Available");if(focus)taskInput.focus();}
+function resetWorkspace(clearComposer=true,focus=clearComposer){if(clearComposer){taskInput.value="";pendingSuggestion=null;}composerFeedback.textContent="";setDetail();businessMeta.textContent=t("task.noVerified");businessResult.innerHTML=`<p class="approval-empty">${esc(t("task.assignForResult"))}</p>`;verificationCount.textContent="0 / 0";verificationList.innerHTML=`<li><span class="check-icon">${svgIcon("circle")}</span><div>${esc(t("verification.waiting"))}</div></li>`;rawEvidence.textContent="";latestEvidence="";evidenceDetails.open=false;taskTrustSummary.hidden=true;taskTrustSummary.innerHTML="";aiSummary.textContent=t("task.summaryAfterVerify");gatewayStatus.textContent=t("task.gatewayNotCalled");currentActivity.innerHTML=`<li><span class="activity-icon idle">${svgIcon("circle")}</span><div class="activity-copy"><strong>${esc(t("rail.waitingWork"))}</strong><small>${esc(t("rail.assignTask"))}</small></div></li>`;setEmployeeMode("Available");if(focus)taskInput.focus();}
 async function refreshData(){[tasks,inbox,approvals]=await Promise.all([work.listTaskHistory(),work.listInbox(),work.listApprovals()]);}
 
 function workRouteTasks(){
   let values=[...tasks];
   if(currentRoute.name==="work"){
     const status=currentRoute.query.get("status")??workStatusFilter.value;
-    const customerId=currentRoute.query.get("customerId");
+    const customerId=currentRoute.query.get("customerId")??workCustomerFilter.value;
     if(status)values=values.filter(task=>task.status===status);
     if(customerId)values=values.filter(task=>task.customerId===customerId);
   }
+  const terminal=new Set<BusinessTask["status"]>(["completed","failed","blocked"]);
+  values=values.map((task,index)=>({task,index})).sort((a,b)=>Number(terminal.has(a.task.status))-Number(terminal.has(b.task.status))||a.index-b.index).map(value=>value.task);
   return currentRoute.name==="home"?values.slice(0,4):values;
+}
+
+async function renderWorkCustomerFilter(){
+  const customers=await business.listCustomers();
+  const selected=currentRoute.name==="work"?(currentRoute.query.get("customerId")??workCustomerFilter.value):"";
+  workCustomerFilter.innerHTML=`<option value="">${esc(t("work.allCustomers"))}</option>`+customers.map(customer=>`<option value="${esc(customer.id)}">${esc(customer.name)}</option>`).join("");
+  workCustomerFilter.value=selected;
 }
 
 async function issueCustomerId(item:BusinessInboxItem):Promise<string|undefined>{
@@ -110,8 +121,8 @@ async function renderKpis(){
 }
 function renderWork(){
   const values=workRouteTasks();
-  workCount.textContent=t("work.taskCount",{count:values.length});
-  historyCount.textContent=t("history.taskCount",{count:tasks.filter(task=>["completed","failed","blocked"].includes(task.status)).length});
+  workCount.textContent=workCountLabel(values.length);
+  historyCount.textContent=historyCountLabel(tasks.filter(task=>["completed","failed","blocked"].includes(task.status)).length);
   if(!values.length){workBody.innerHTML=`<tr><td class="empty-row" colspan="5">${esc(t("work.noMatch"))}</td></tr>`;workCards.innerHTML=`<div class="approval-empty">${esc(t("work.noMatch"))}</div>`;return;}
   workBody.innerHTML=values.slice(0,20).map(task=>`<tr><td><div class="task-name">${esc(task.title)}</div><div class="task-context">${esc(task.intent)}</div></td><td>${esc(task.customerQuery??DEMO_COMPANY_NAME)}</td><td><span class="status-chip ${taskOutcomeClass(task)}">${esc(outcomeLabel(task))}</span></td><td>${esc(task.verification?`${task.verification.passed}/${task.verification.total} ${t("work.verified")}`:task.status)}</td><td><a class="link-btn inspect-task-link" href="${routeHref(`/tasks/${encodeURIComponent(task.id)}`)}">${esc(t("work.viewTask"))}</a></td></tr>`).join("");
   workCards.innerHTML=values.slice(0,20).map(task=>`<article class="work-card"><div class="work-card-head"><h3>${esc(task.title)}</h3><span class="status-chip ${taskOutcomeClass(task)}">${esc(outcomeLabel(task))}</span></div><dl><dt>${esc(t("common.intent"))}</dt><dd>${esc(task.intent)}</dd><dt>${esc(t("common.context"))}</dt><dd>${esc(task.customerQuery??DEMO_COMPANY_NAME)}</dd><dt>${esc(t("common.updated"))}</dt><dd>${formatDateTime(task.updatedAt)}</dd></dl><a class="link-btn inspect-task-link" href="${routeHref(`/tasks/${encodeURIComponent(task.id)}`)}">${esc(t("work.viewTask"))}</a></article>`).join("");
@@ -162,7 +173,9 @@ async function renderInbox(){
   const rows=await Promise.all(visible.slice(0,50).map(async item=>{
     const relatedTask=tasks.find(task=>(item.relatedTaskIds??[]).includes(task.id));
     const related=relatedTask?`${relatedTask.title} · ${outcomeLabel(relatedTask)}`:t("inbox.noRelatedTask");
-    return `<li class="inbox-item-card"><div class="inbox-copy"><strong>${esc(item.title)}</strong><small>${esc(item.detail)}</small><div class="inbox-meta"><span>${esc(t("common.statusLabel"))}: ${esc(inboxStatusLabel(item.status))}</span><span>${esc(t("common.actions"))}: ${esc(inboxTypeLabel(item.type))}</span><span>${esc(t("inbox.severity"))}: ${esc(severityLabel(item.severity))}</span><span>${esc(t("inbox.related"))}: ${esc(await entityLabel(item))}</span><span>${esc(t("inbox.relatedTask"))}: ${esc(related)}</span><span>${esc(t("common.created"))}: ${formatDateTime(item.createdAt)}</span><span>${esc(t("inbox.localNote"))}</span></div></div><div class="inbox-actions">${inboxActions(item,relatedTask,invoiceOptions)}</div></li>`;
+    const managerDecision=item.type==="approval-required"||item.type==="credit-limit";
+    const kindLabel=managerDecision?t("inbox.managerDecision"):t("inbox.operationalIssue");
+    return `<li class="inbox-item-card severity-${esc(item.severity)} ${managerDecision?"issue-manager":"issue-operational"}"><div class="inbox-copy"><div class="inbox-badges"><span class="issue-chip kind">${esc(kindLabel)}</span><span class="issue-chip severity ${esc(item.severity)}">${esc(severityLabel(item.severity))}</span><span class="issue-chip type">${esc(inboxTypeLabel(item.type))}</span></div><strong>${esc(item.title)}</strong><small>${esc(item.detail)}</small><div class="inbox-meta"><span>${esc(t("common.statusLabel"))}: ${esc(inboxStatusLabel(item.status))}</span><span>${esc(t("inbox.related"))}: ${esc(await entityLabel(item))}</span><span>${esc(t("inbox.relatedTask"))}: ${esc(related)}</span><span>${esc(t("common.created"))}: ${formatDateTime(item.createdAt)}</span><span>${esc(t("inbox.localNote"))}</span></div></div><div class="inbox-actions">${inboxActions(item,relatedTask,invoiceOptions)}</div></li>`;
   }));
   inboxList.innerHTML=rows.join("");
 }
@@ -190,7 +203,7 @@ function renderBrief(){
 
 async function renderHistory(){
   const terminal=tasks.filter(task=>["completed","failed","blocked"].includes(task.status));
-  historyCount.textContent=t("history.taskCount",{count:terminal.length});
+  historyCount.textContent=historyCountLabel(terminal.length);
   if(!terminal.length){historyList.innerHTML=`<p class="approval-empty">${esc(t("history.noTerminal"))}</p>`;return;}
   historyList.innerHTML=terminal.map(task=>`<article class="history-item" data-task-id="${task.id}"><div><h3>${esc(task.title)}</h3><p>${esc(task.intent)} · ${esc(t("common.updated"))} ${formatDateTime(task.updatedAt)}</p></div><span class="status-chip ${taskOutcomeClass(task)}">${esc(outcomeLabel(task))}</span><a class="link-btn" href="${routeHref(`/tasks/${encodeURIComponent(task.id)}`,{tab:"timeline"})}">${esc(t("history.inspectTimeline"))}</a></article>`).join("");
 }
@@ -204,17 +217,20 @@ async function renderCustomers(filter=""){
 async function showCustomer(id:string){
   const customer=await business.getCustomer(id);if(!customer)return;
   const [review,related]=await Promise.all([reviewCustomer(business,customer),work.listTaskHistory()]);
+  const issuePairs=await Promise.all(inbox.filter(item=>item.status!=="resolved").map(async item=>({item,customerId:await issueCustomerId(item)})));
+  const relatedIssues=issuePairs.filter(pair=>pair.customerId===customer.id).map(pair=>pair.item);
   const reviewTask=`Review ${customer.name} receivables.`;const followTask=`Prepare ${customer.name} follow-up.`;
   customerDetail.innerHTML=`<h3>${esc(customer.name)}</h3><p>${esc(customer.code)} · ${esc(t(`common.status.${customer.status}`))} · ${esc(t("common.risk"))} ${esc(riskLabel(customer.risk))}</p>
     <div class="customer-actions"><button class="secondary-btn customer-compose-action" data-task="${esc(reviewTask)}" type="button">${esc(t("customers.reviewReceivables"))}</button><button class="secondary-btn customer-compose-action" data-task="${esc(followTask)}" type="button">${esc(t("customers.prepareFollowup"))}</button><a class="secondary-btn" href="${routeHref("/inbox",{customerId:customer.id})}">${esc(t("customers.viewExceptions"))}</a><a class="secondary-btn" href="${routeHref("/work",{customerId:customer.id})}">${esc(t("customers.viewRelatedTasks"))}</a></div>
     <div class="entity-summary"><div><span>${esc(t("common.outstanding"))}</span><strong>${money(review.outstandingTotal)}</strong></div><div><span>${esc(t("task.openInvoices"))}</span><strong>${review.open.length}</strong></div><div><span>${esc(t("customers.creditLimit"))}</span><strong>${money(customer.creditLimit)}</strong></div></div>
     <h4>${esc(t("common.invoices"))}</h4><table class="mini-table"><thead><tr><th>${esc(t("common.invoice"))}</th><th>${esc(t("customers.due"))}</th><th>${esc(t("common.outstanding"))}</th><th>${esc(t("connections.status"))}</th></tr></thead><tbody>${review.rows.map(row=>`<tr><td>${esc(row.invoice.number)}</td><td>${formatDate(row.invoice.dueOn)}</td><td>${money(row.outstanding)}</td><td>${esc(invoiceStatusLabel(row.invoice.status))}</td></tr>`).join("")}</tbody></table>
     <h4>${esc(t("common.payments"))}</h4><table class="mini-table"><tbody>${review.payments.map(payment=>`<tr><td>${esc(payment.reference)}</td><td>${money(payment.amount)}</td><td>${esc(paymentStatusLabel(payment.status))}</td></tr>`).join("")||`<tr><td>${esc(t("common.none"))}</td></tr>`}</tbody></table>
-    <h4>${esc(t("customers.relatedTasks"))}</h4><div class="related-task-list">${related.filter(task=>task.customerId===customer.id).map(task=>`<a class="link-btn" href="${routeHref(`/tasks/${encodeURIComponent(task.id)}`)}">${esc(task.title)} · ${esc(outcomeLabel(task))}</a>`).join("")||esc(t("customers.noRelatedTasks"))}</div>`;
+    <div class="customer-subsection"><div class="subsection-head"><h4>${esc(t("customers.exceptions"))}</h4><a class="link-btn" href="${routeHref("/inbox",{customerId:customer.id})}">${esc(t("customers.viewExceptions"))}</a></div>${relatedIssues.length?`<div class="customer-exception-list">${relatedIssues.map(item=>`<article><span class="issue-chip severity ${esc(item.severity)}">${esc(severityLabel(item.severity))}</span><div><strong>${esc(item.title)}</strong><small>${esc(inboxTypeLabel(item.type))} · ${esc(inboxStatusLabel(item.status))}</small></div></article>`).join("")}</div>`:`<p class="approval-empty">${esc(t("customers.noExceptions"))}</p>`}</div>
+    <div class="customer-subsection"><div class="subsection-head"><h4>${esc(t("customers.relatedTasks"))}</h4><a class="link-btn" href="${routeHref("/work",{customerId:customer.id})}">${esc(t("customers.viewRelatedTasks"))}</a></div><div class="related-task-list">${related.filter(task=>task.customerId===customer.id).map(task=>`<a class="link-btn" href="${routeHref(`/tasks/${encodeURIComponent(task.id)}`)}">${esc(task.title)} · ${esc(outcomeLabel(task))}</a>`).join("")||esc(t("customers.noRelatedTasks"))}</div></div>`;
   document.querySelectorAll(".customer-row").forEach(element=>element.classList.toggle("active",(element as HTMLElement).dataset.id===id));
 }
 
-async function renderAll(){await refreshData();renderWork();renderApprovals();renderBrief();await Promise.all([renderKpis(),renderHistory(),renderCustomers(customerSearch.value),renderInbox()]);applyDomTranslations();}
+async function renderAll(){await refreshData();await renderWorkCustomerFilter();renderWork();renderApprovals();renderBrief();await Promise.all([renderKpis(),renderHistory(),renderCustomers(customerSearch.value),renderInbox()]);applyDomTranslations();}
 function safeMarkdown(value:string){const escaped=esc(value);return escaped.replace(/^###?\s+(.+)$/gm,"<h3>$1</h3>").replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/^[-*]\s+(.+)$/gm,"<div>• $1</div>").replace(/\n/g,"<br>");}
 function renderSummary(summary:Record<string,unknown>){
   const customer=summary.customer as any;
@@ -233,7 +249,7 @@ async function renderTaskPanels(task:BusinessTask,events:any[],evidence:any[],re
   taskTimelinePanel.innerHTML=`<h3>${esc(t("task.timeline"))}</h3><div class="timeline">${events.map(event=>`<div class="timeline-row"><b>${esc(activityLabel(event.type,event.message))}</b><span><code>${esc(event.type)}</code></span><span>${formatDateTime(event.occurredAt)}</span></div>`).join("")}</div>`;
   const verificationEvidence=evidence.find(item=>item.type==="verification")?.data as any;const verificationText=task.verification?t("verification.checksPassed",{passed:task.verification.passed,total:task.verification.total}):t("verification.noCompleted");
   taskVerificationPanel.innerHTML=`<h3>${esc(t("verification.title"))}</h3><p><strong>${esc(verificationText)}</strong></p><ul class="check-list">${verificationEvidence?.checks?.map((check:any)=>`<li data-pass="${!!check.passed}"><span class="check-icon">${svgIcon(check.passed?"check":"x")}</span><div><strong>${esc(verificationLabel(check.id))}</strong><small class="technical-id">${esc(check.id)}</small>${check.message?`<div>${esc(check.message)}</div>`:""}</div></li>`).join("")??""}</ul>`;
-  taskEvidencePanel.innerHTML=`<h3>${esc(t("task.evidence"))}</h3><p>${esc(t("task.evidenceHelp"))}</p><pre class="task-evidence-pre">${esc(JSON.stringify(evidence,null,2))}</pre>`;
+  taskEvidencePanel.innerHTML=`<div class="evidence-panel-head"><div><h3>${esc(t("task.evidence"))}</h3><p>${esc(t("task.evidenceHelp"))}</p></div><span class="meta">${esc(t("task.evidenceRecords",{count:evidence.length}))}</span></div>${evidence.length?`<div class="task-evidence-list">${evidence.map((record:any)=>`<details class="task-evidence-record"><summary><span><strong>${esc(record.type)}</strong><small>${esc(record.source)} · ${formatDateTime(record.createdAt)}</small></span><span>${esc(t("task.rawRecord"))}</span></summary><pre>${esc(JSON.stringify(record,null,2))}</pre></details>`).join("")}</div>`:`<p class="approval-empty">${esc(t("task.noIssues"))}</p>`}`;
   taskIssuesPanel.innerHTML=`<h3>${esc(t("task.tab.issues"))}</h3>${relatedIssues.length?relatedIssues.map(item=>`<article class="related-issue"><strong>${esc(item.title)}</strong><span>${esc(inboxTypeLabel(item.type))} · ${esc(severityLabel(item.severity))} · ${esc(inboxStatusLabel(item.status))}</span></article>`).join(""):`<p class="approval-empty">${esc(t("task.noIssues"))}</p>`}`;
   const approval=approvals.find(value=>value.taskId===task.id);
   taskApprovalPanel.innerHTML=approval?`<h3>${esc(t("task.relatedApproval"))}</h3><p><a class="link-btn" href="${routeHref(`/approvals/${encodeURIComponent(approval.id)}`)}">${esc(approval.title)}</a></p><p>${esc(t("connections.status"))}: <strong>${esc(t(`approvals.state.${approval.state}`))}</strong></p>`:`<h3>${esc(t("task.relatedApproval"))}</h3><p class="approval-empty">${esc(t("task.noApproval"))}</p>`;
@@ -257,6 +273,7 @@ async function renderTaskDetail(taskId:string){
   if(relatedIssues.length)resultHtml+=`<div class="related-issues"><h4>${esc(t("task.relatedInbox"))}</h4>${relatedIssues.map(item=>`<div class="related-issue"><strong>${esc(item.title)}</strong><span>${esc(severityLabel(item.severity))} · ${esc(inboxStatusLabel(item.status))}</span></div>`).join("")}</div>`;
   businessResult.innerHTML=resultHtml;await renderTaskPanels(task,events,evidence,relatedIssues);
   verificationCount.textContent=task.verification?t("verification.checksPassed",{passed:task.verification.passed,total:task.verification.total}):"0 / 0";
+  if(task.verification){taskTrustSummary.hidden=false;taskTrustSummary.innerHTML=`<div class="trust-summary-copy"><span>${esc(t("task.verifiedResult"))}</span><strong>${esc(t("task.verificationSummary",{passed:task.verification.passed,total:task.verification.total}))}</strong></div><a class="secondary-btn" href="${routeHref(`/tasks/${encodeURIComponent(task.id)}`,{tab:"verification"})}">${esc(t("task.reviewVerification"))}</a>`;}else{taskTrustSummary.hidden=true;taskTrustSummary.innerHTML="";}
   const verificationEvidence=evidence.find(item=>item.type==="verification")?.data as any;
   verificationList.innerHTML=verificationEvidence?.checks?.length?verificationEvidence.checks.map((check:any)=>`<li data-pass="${!!check.passed}"><span class="check-icon">${svgIcon(check.passed?"check":"x")}</span><div><strong>${esc(verificationLabel(check.id))}</strong><small class="technical-id">${esc(check.id)}</small>${check.message?`<div>${esc(check.message)}</div>`:""}</div></li>`).join(""):`<li><span class="check-icon">${svgIcon("circle")}</span><div>${esc(t("verification.waiting"))}</div></li>`;
   latestEvidence=JSON.stringify(evidence,null,2);rawEvidence.textContent=latestEvidence;
@@ -278,31 +295,33 @@ async function renderApprovalDetailPage(approvalId:string){
 
 function renderCapabilitiesPage(){
   const capabilities=[
-    ["capabilities.customerLookup","capabilities.customerLookupDesc","capabilities.uniqueIdentity","capabilities.readOnly"],
-    ["capabilities.receivables","capabilities.receivablesDesc","capabilities.reconciliation","capabilities.readOnly"],
-    ["capabilities.payment","capabilities.paymentDesc","capabilities.exceptionEnumeration","capabilities.localSimulation"],
-    ["capabilities.followup","capabilities.followupDesc","capabilities.coverage","capabilities.approvalAvailable"],
-    ["capabilities.exception","capabilities.exceptionDesc","capabilities.exceptionEnumeration","capabilities.readOnly"],
-    ["capabilities.portfolio","capabilities.portfolioDesc","capabilities.portfolioConsistency","capabilities.readOnly"],
-    ["capabilities.brief","capabilities.briefDesc","capabilities.snapshotConsistency","capabilities.readOnly"],
+    ["capabilities.customerLookup","capabilities.customerLookupDesc","capabilities.customerData","capabilities.none","capabilities.uniqueIdentity","capabilities.noApproval","capabilities.noExternalWrite"],
+    ["capabilities.receivables","capabilities.receivablesDesc","capabilities.receivablesData","capabilities.none","capabilities.reconciliation","capabilities.noApproval","capabilities.noExternalWrite"],
+    ["capabilities.payment","capabilities.paymentDesc","capabilities.paymentData","capabilities.localIssueState","capabilities.exceptionEnumeration","capabilities.noApproval","capabilities.localSimulation"],
+    ["capabilities.followup","capabilities.followupDesc","capabilities.followupData","capabilities.localDraftAction","capabilities.coverage","capabilities.managerControlled","capabilities.noExternalWrite"],
+    ["capabilities.exception","capabilities.exceptionDesc","capabilities.exceptionData","capabilities.localIssueState","capabilities.exceptionEnumeration","capabilities.managerControlled","capabilities.localSimulation"],
+    ["capabilities.portfolio","capabilities.portfolioDesc","capabilities.portfolioData","capabilities.none","capabilities.portfolioConsistency","capabilities.noApproval","capabilities.noExternalWrite"],
+    ["capabilities.brief","capabilities.briefDesc","capabilities.briefData","capabilities.none","capabilities.snapshotConsistency","capabilities.noApproval","capabilities.noExternalWrite"],
   ];
-  capabilitiesGrid.innerHTML=capabilities.map(([name,what,verificationMode,boundary])=>`<article class="capability-card"><h3>${esc(t(name))}</h3><p>${esc(t(what))}</p><dl><dt>${esc(t("capabilities.dataSource"))}</dt><dd>${esc(t("capabilities.localDb"))}</dd><dt>${esc(t("capabilities.verification"))}</dt><dd>${esc(t(verificationMode))}</dd><dt>${esc(t("capabilities.boundary"))}</dt><dd>${esc(t(boundary))}</dd></dl></article>`).join("");
+  capabilitiesGrid.innerHTML=capabilities.map(([name,purpose,reads,changes,verificationMode,approval,limitation])=>`<article class="capability-card"><div class="capability-card-head"><div><h3>${esc(t(name))}</h3><p>${esc(t(purpose))}</p></div><span class="capability-boundary">${esc(t(limitation))}</span></div><dl><dt>${esc(t("capabilities.reads"))}</dt><dd>${esc(t(reads))}</dd><dt>${esc(t("capabilities.mayChange"))}</dt><dd>${esc(t(changes))}</dd><dt>${esc(t("capabilities.verification"))}</dt><dd>${esc(t(verificationMode))}</dd><dt>${esc(t("capabilities.approvalRequirement"))}</dt><dd>${esc(t(approval))}</dd><dt>${esc(t("capabilities.demoLimitation"))}</dt><dd>${esc(t(limitation))}</dd></dl></article>`).join("");
 }
 
 function renderConnectionsPage(){
+  const pwaStatus=document.querySelector<HTMLElement>("#pwa-status")?.textContent??t("pwa.webApp");
+  const appVersion=document.querySelector<HTMLElement>("#app-version")?.textContent??t("common.versionLoading");
   const rows=[
-    [t("connections.browser"),t("connections.ready"),t("connections.browserPurpose"),t("connections.localBrowser"),t("connections.localRw"),t("connections.realRuntime")],
-    [t("connections.gateway"),t("connections.ready"),t("connections.gatewayPurpose"),t("connections.memoryToken"),t("connections.verifiedFacts"),t("connections.demoService")],
-    [t("connections.businessData"),t("common.demo"),t("connections.businessPurpose"),t("capabilities.localDb"),t("connections.localDemoData"),t("common.demo")],
-    [t("connections.erp"),t("common.notConnected"),t("connections.erpPurpose"),t("connections.none"),t("connections.noAccess"),t("common.notConnected")],
-    [t("connections.gmail"),t("common.notConnected"),t("connections.gmailPurpose"),t("connections.none"),t("connections.noSendRead"),t("common.notConnected")],
+    {name:t("connections.browser"),status:t("connections.ready"),purpose:t("connections.browserPurpose"),permission:t("connections.localBrowser"),boundary:t("connections.localRw"),mode:t("connections.realRuntime")},
+    {name:t("connections.gateway"),status:gatewayConnection.textContent||t("connections.ready"),purpose:t("connections.gatewayPurpose"),permission:t("connections.memoryToken"),boundary:t("connections.verifiedFacts"),mode:t("connections.demoService")},
+    {name:t("connections.businessData"),status:t("common.demo"),purpose:t("connections.businessPurpose"),permission:t("capabilities.localDb"),boundary:t("connections.localDemoData"),mode:t("common.demo")},
+    {name:t("connections.app"),status:pwaStatus,purpose:t("connections.appPurpose"),permission:t("connections.appPermission"),boundary:t("connections.appBoundary"),mode:`${t("connections.pwaMode")} · ${appVersion}`},
+    {name:t("connections.erp"),status:t("common.notConnected"),purpose:t("connections.erpPurpose"),permission:t("connections.none"),boundary:t("connections.noAccess"),mode:t("common.notConnected")},
+    {name:t("connections.gmail"),status:t("common.notConnected"),purpose:t("connections.gmailPurpose"),permission:t("connections.none"),boundary:t("connections.noSendRead"),mode:t("common.notConnected")},
   ];
-  const headers=["connections.connection","connections.status","connections.purpose","connections.permission","connections.boundary","connections.mode"];
-  connectionsPageBody.innerHTML=`<table class="mini-table connection-table"><thead><tr>${headers.map(key=>`<th>${esc(t(key))}</th>`).join("")}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(cell=>`<td>${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table><p class="approval-empty">${esc(t("connections.noFake"))}</p>`;
+  connectionsPageBody.innerHTML=`<div class="connection-card-grid">${rows.map(row=>{const disconnected=row.status===t("common.notConnected");const demo=row.status===t("common.demo");return`<article class="connection-card ${disconnected?"disconnected":demo?"demo":""}"><div class="connection-card-head"><h3>${esc(row.name)}</h3><span class="connection-state ${disconnected?"off":demo?"demo":""}">${esc(row.status)}</span></div><p>${esc(row.purpose)}</p><dl><dt>${esc(t("connections.permission"))}</dt><dd>${esc(row.permission)}</dd><dt>${esc(t("connections.boundary"))}</dt><dd>${esc(row.boundary)}</dd><dt>${esc(t("connections.mode"))}</dt><dd>${esc(row.mode)}</dd></dl></article>`}).join("")}</div><p class="approval-empty connection-boundary-note">${esc(t("connections.noFake"))}</p>`;
 }
 
 function replaceRoute(path:string,query:Record<string,string|undefined>={}){history.replaceState(null,"",`${location.pathname}${location.search}${routeHref(path,query)}`);void applyRoute(parseHash());}
-let lastFocusedPath="";let routeEpoch=0;
+let lastFocusedPath="";let routeEpoch=0;let routeFocusInitialized=false;
 async function applyRoute(route:AppRoute){
   const epoch=++routeEpoch,isCurrent=()=>epoch===routeEpoch;
   currentRoute=route;document.body.className=document.body.className.replace(/\broute-[a-z-]+\b/g,"").trim();document.body.classList.add(`route-${route.name}`);
@@ -310,20 +329,20 @@ async function applyRoute(route:AppRoute){
   const parent=navParent(route);document.querySelectorAll<HTMLElement>("[data-nav-route]").forEach(element=>{const active=element.dataset.navRoute===parent;element.classList.toggle("active",active);if(active)element.setAttribute("aria-current","page");else element.removeAttribute("aria-current");});closeDrawer();
   const titleFor=(key:string)=>`${t(key)} · Alex`;
   if(route.name==="home"){document.title=titleFor("nav.home");if(tasks[0])await renderTaskDetail(tasks[0].id);else resetWorkspace(false,false);if(!isCurrent())return;}
-  if(route.name==="work"){document.title=titleFor("nav.work");workStatusFilter.value=route.query.get("status")??"";renderWork();}
+  if(route.name==="work"){document.title=titleFor("nav.work");workStatusFilter.value=route.query.get("status")??"";await renderWorkCustomerFilter();if(!isCurrent())return;renderWork();}
   if(route.name==="inbox"){document.title=titleFor("nav.inbox");inboxStatusFilter.value=route.query.get("status")??"";inboxSeverityFilter.value=route.query.get("severity")??"";inboxTypeFilter.value=route.query.get("type")??"";await renderInbox();if(!isCurrent())return;}
   if(route.name==="customers"){document.title=titleFor("nav.customers");const q=route.query.get("q")??"";customerSearch.value=q;await renderCustomers(q);if(!isCurrent())return;customerDetail.innerHTML=`<p class="approval-empty">${esc(t("customers.selectHelp"))}</p>`;document.querySelector("#customers-view h2")!.textContent=t("customers.title");}
   if(route.name==="customer"){const customer=await business.getCustomer(route.params.customerId!);if(!isCurrent())return;if(customer){await showCustomer(customer.id);if(!isCurrent())return;document.querySelector("#customers-view h2")!.textContent=customer.name;document.title=`${customer.name} · ${t("nav.customers")}`;}else{customerDetail.innerHTML=`<div class="result-notice failed"><strong>${esc(t("customers.notFound"))}</strong></div>`;document.title=`${t("customers.notFound")} · ${t("nav.customers")}`;}}
   if(route.name==="history"){document.title=titleFor("nav.history");await renderHistory();if(!isCurrent())return;}
   if(route.name==="approvals"){document.title=titleFor("nav.approvals");renderApprovals();}
-  if(route.name==="approval"){const approvalTitle=await renderApprovalDetailPage(route.params.approvalId!);if(!isCurrent())return;document.title=`${approvalTitle} · ${t("nav.approvals")}`;}
-  if(route.name==="task"){const task=await work.getTask(route.params.taskId!);if(!isCurrent())return;if(task){await renderTaskDetail(task.id);if(!isCurrent())return;const heading=document.querySelector<HTMLElement>("#task-detail h2");if(heading)heading.textContent=task.title;document.title=`${task.title} · Alex`;}else{businessResult.innerHTML=`<div class="result-notice failed"><strong>${esc(t("task.notFound"))}</strong><p>${esc(t("task.notFoundHelp"))}</p></div>`;document.title=`${t("task.notFound")} · Alex`;}}
+  if(route.name==="approval"){document.title=`${t("approvals.detail")} · Alex`;const approvalTitle=await renderApprovalDetailPage(route.params.approvalId!);if(!isCurrent())return;document.title=`${approvalTitle} · ${t("nav.approvals")}`;}
+  if(route.name==="task"){document.title=`${t("task.latest")} · Alex`;const task=await work.getTask(route.params.taskId!);if(!isCurrent())return;if(task){await renderTaskDetail(task.id);if(!isCurrent())return;const heading=document.querySelector<HTMLElement>("#task-detail h2");if(heading)heading.textContent=task.title;document.title=`${task.title} · Alex`;}else{businessResult.innerHTML=`<div class="result-notice failed"><strong>${esc(t("task.notFound"))}</strong><p>${esc(t("task.notFoundHelp"))}</p></div>`;document.title=`${t("task.notFound")} · Alex`;}}
   if(route.name==="capabilities"){renderCapabilitiesPage();document.title=titleFor("nav.capabilities");}
   if(route.name==="connections"){renderConnectionsPage();document.title=titleFor("nav.connections");}
   if(route.name==="settings"){languageSelect.value=getLocale();settingsAppVersion.textContent=document.querySelector("#app-version")?.textContent??t("common.versionLoading");document.title=titleFor("nav.settings");}
   if(!isCurrent())return;
   applyDomTranslations();
-  if(lastFocusedPath!==route.path){lastFocusedPath=route.path;requestAnimationFrame(()=>{const heading=document.querySelector<HTMLElement>("#main-content [data-pages]:not([hidden]) h1, #main-content [data-pages]:not([hidden]) h2");if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});window.scrollTo({top:0,behavior:"instant" as ScrollBehavior});}});}
+  if(lastFocusedPath!==route.path){lastFocusedPath=route.path;if(routeFocusInitialized){requestAnimationFrame(()=>{const heading=document.querySelector<HTMLElement>("#main-content [data-pages]:not([hidden]) h1, #main-content [data-pages]:not([hidden]) h2");if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});window.scrollTo({top:0,behavior:"instant" as ScrollBehavior});}});}else routeFocusInitialized=true;}
 }
 
 async function createManagerSummary(result:BusinessWorldResult){
@@ -394,6 +413,7 @@ function closeDrawer(){trustDrawer.classList.remove("open");drawerOverlay.classL
 async function refreshAfterReset(message:string){await renderAll();resetWorkspace(true,false);composerFeedback.textContent=message;}
 
 function bindEvents(){
+  document.querySelector<HTMLAnchorElement>(".skip-link")?.addEventListener("click",event=>{event.preventDefault();const main=$<HTMLElement>("#main-content");main.focus({preventScroll:true});main.scrollIntoView({block:"start"});});
   form.addEventListener("submit",event=>{event.preventDefault();void assign();});
   const toggleKeys:Record<string,[string,string]>={"scenario-library":["mobile.openScenario","mobile.closeScenario"],"customers-view":["mobile.openCustomers","mobile.closeCustomers"],"history-view":["mobile.openHistory","mobile.closeHistory"],"today-brief":["mobile.openBrief","mobile.closeBrief"]};
   document.querySelectorAll<HTMLButtonElement>(".mobile-section-toggle").forEach(button=>button.addEventListener("click",()=>{
@@ -409,7 +429,8 @@ function bindEvents(){
   });
   taskInput.addEventListener("input",()=>{if(pendingSuggestion&&taskInput.value!==pendingSuggestion.display)pendingSuggestion=null;});
   customerSearch.addEventListener("input",()=>{if(currentRoute.name==="customers")replaceRoute("/customers",{q:customerSearch.value||undefined});else void renderCustomers(customerSearch.value);});
-  workStatusFilter.addEventListener("change",()=>navigate("/work",{status:workStatusFilter.value||undefined,customerId:currentRoute.query.get("customerId")??undefined}));
+  workStatusFilter.addEventListener("change",()=>navigate("/work",{status:workStatusFilter.value||undefined,customerId:workCustomerFilter.value||(currentRoute.query.get("customerId")??undefined)}));
+  workCustomerFilter.addEventListener("change",()=>navigate("/work",{status:workStatusFilter.value||undefined,customerId:workCustomerFilter.value||undefined}));
   const inboxFilterRoute=()=>navigate("/inbox",{status:inboxStatusFilter.value||undefined,severity:inboxSeverityFilter.value||undefined,type:inboxTypeFilter.value||undefined,customerId:currentRoute.query.get("customerId")??undefined});
   inboxStatusFilter.addEventListener("change",inboxFilterRoute);inboxSeverityFilter.addEventListener("change",inboxFilterRoute);inboxTypeFilter.addEventListener("change",inboxFilterRoute);
   $("#new-task").addEventListener("click",()=>{navigate("/home");setTimeout(()=>resetWorkspace(true,true),0);});

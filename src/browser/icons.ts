@@ -2,7 +2,8 @@ export type IconName =
   | "home" | "work" | "mail" | "approval" | "users" | "tasks" | "history"
   | "skills" | "link" | "settings" | "search" | "bell" | "plus" | "sparkle"
   | "send" | "file" | "chart" | "alert" | "chevron-down" | "arrow-right"
-  | "circle" | "circle-dot" | "status-dot" | "check" | "x" | "shield" | "code" | "more";
+  | "circle" | "circle-dot" | "status-dot" | "check" | "x" | "shield" | "code" | "more"
+  | "globe" | "download" | "database" | "info";
 
 const paths: Record<IconName, string> = {
   home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-7h6v7"/>',
@@ -33,6 +34,10 @@ const paths: Record<IconName, string> = {
   shield: '<path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z"/><path d="m8 12 2.5 2.5L16 9"/>',
   code: '<path d="m9 7-5 5 5 5M15 7l5 5-5 5M13 5l-2 14"/>',
   more: '<circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.4 2.5 3.6 5.5 3.6 9S14.4 18.5 12 21c-2.4-2.5-3.6-5.5-3.6-9S9.6 5.5 12 3z"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 19h16"/>',
+  database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/>',
 };
 
 export function svgIcon(name: IconName, className = "icon-svg", label?: string): string {

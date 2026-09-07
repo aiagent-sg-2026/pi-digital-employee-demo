@@ -43,10 +43,15 @@ export async function bootstrapPwa(): Promise<void> {
   const updateVersion = document.querySelector<HTMLElement>("#pwa-update-version");
   const updateNow = document.querySelector<HTMLButtonElement>("#pwa-update-now");
   const updateLater = document.querySelector<HTMLButtonElement>("#pwa-update-later");
+  const settingsVersion = document.querySelector<HTMLElement>("#settings-app-version");
+  const settingsStatus = document.querySelector<HTMLElement>("#settings-pwa-status");
+  const settingsUpdateState = document.querySelector<HTMLElement>("#settings-update-state");
 
   const currentLabel = versionLabel(CURRENT_APP_VERSION);
   if (versionNode) versionNode.textContent = currentLabel;
   if (versionRail) versionRail.textContent = currentLabel;
+  if (settingsVersion) settingsVersion.textContent = currentLabel;
+  if (settingsUpdateState) settingsUpdateState.textContent = t("settings.upToDate");
   if (!import.meta.env.PROD) {
     if (pwaStatus) pwaStatus.textContent = t("pwa.status.dev");
     if (pwaStatusRail) pwaStatusRail.textContent = t("pwa.status.devPreview");
@@ -64,10 +69,13 @@ export async function bootstrapPwa(): Promise<void> {
   let reloadingForUpdate = false;
 
   let statusKey = "pwa.status.offlineReady";
+  let updateStateKey = "settings.upToDate";
   const setPwaStatus = (text: string) => {
     if (pwaStatus) pwaStatus.textContent = text;
     if (pwaStatusRail) pwaStatusRail.textContent = text;
+    if (settingsStatus) settingsStatus.textContent = text;
   };
+  const setUpdateState = (key:string) => {updateStateKey=key;if(settingsUpdateState)settingsUpdateState.textContent=t(key);};
   const syncNetworkStatus = () => {statusKey=navigator.onLine?"pwa.status.offlineReady":"pwa.status.offlineCached";setPwaStatus(t(statusKey));};
   window.addEventListener("online", syncNetworkStatus);
   window.addEventListener("offline", syncNetworkStatus);
@@ -87,6 +95,7 @@ export async function bootstrapPwa(): Promise<void> {
     }
     if (updateVersion) updateVersion.textContent = versionLabel(info);
     if (updateBanner) updateBanner.hidden = false;
+    setUpdateState("settings.updateReady");
   };
 
   const observeInstallingWorker = (registration: ServiceWorkerRegistration) => {
@@ -143,6 +152,7 @@ export async function bootstrapPwa(): Promise<void> {
     updateAcceptedByUser = true;
     updateNow.disabled = true;
     updateNow.textContent = t("pwa.updating");
+    setUpdateState("pwa.updating");
     waitingWorker.postMessage({ type: "SKIP_WAITING" });
   });
   updateLater?.addEventListener("click", hideUpdate);
@@ -152,6 +162,8 @@ export async function bootstrapPwa(): Promise<void> {
     if(updateNow&&!updateNow.disabled)updateNow.textContent=t("pwa.updateNow");
     if(updateLater)updateLater.textContent=t("pwa.later");
     if(installButton)installButton.textContent=t("pwa.install");
+    if(settingsVersion)settingsVersion.textContent=currentLabel;
+    if(settingsUpdateState)settingsUpdateState.textContent=t(updateStateKey);
   });
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
