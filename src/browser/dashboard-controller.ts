@@ -36,7 +36,7 @@ const statusLabel=(s:BusinessTask["status"])=>({created:"Ready",running:"Running
 const statusClass=(s:BusinessTask["status"])=>s==="completed"?"completed":s==="needs-review"?"review":s==="needs-approval"?"approval":s==="failed"?"failed":s==="blocked"?"blocked":"running";
 function setEmployeeMode(mode:string){employeeMode.textContent=mode;lastUpdated.textContent=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}
 function setDetail(task?:BusinessTask){if(!task){detailState.textContent="Ready";detailState.className="status-chip running";return;}detailState.textContent=taskOutcomeLabel(task);detailState.className=`status-chip ${taskOutcomeClass(task)}`;}
-function resetWorkspace(focus=true){taskInput.value="";composerFeedback.textContent="";setDetail();businessMeta.textContent="No verified result yet";businessResult.innerHTML='<p class="approval-empty">Assign a task to see Alex\'s verified business result.</p>';verificationCount.textContent="0 / 0";verificationList.innerHTML=`<li><span class="check-icon">${svgIcon("circle")}</span><div>Waiting for verified evidence.</div></li>`;rawEvidence.textContent="";latestEvidence="";evidenceDetails.open=false;aiSummary.textContent="Generated only after deterministic verification passes.";gatewayStatus.textContent="Demo Gateway not called yet.";currentActivity.innerHTML=`<li><span class="activity-icon idle">${svgIcon("circle")}</span><div class="activity-copy"><strong>Waiting for work</strong><small>Assign a task to Alex.</small></div></li>`;setEmployeeMode("Available");if(focus)taskInput.focus();}
+function resetWorkspace(clearComposer=true,focus=clearComposer){if(clearComposer)taskInput.value="";composerFeedback.textContent="";setDetail();businessMeta.textContent="No verified result yet";businessResult.innerHTML='<p class="approval-empty">Assign a task to see Alex\'s verified business result.</p>';verificationCount.textContent="0 / 0";verificationList.innerHTML=`<li><span class="check-icon">${svgIcon("circle")}</span><div>Waiting for verified evidence.</div></li>`;rawEvidence.textContent="";latestEvidence="";evidenceDetails.open=false;aiSummary.textContent="Generated only after deterministic verification passes.";gatewayStatus.textContent="Demo Gateway not called yet.";currentActivity.innerHTML=`<li><span class="activity-icon idle">${svgIcon("circle")}</span><div class="activity-copy"><strong>Waiting for work</strong><small>Assign a task to Alex.</small></div></li>`;setEmployeeMode("Available");if(focus)taskInput.focus();}
 async function refreshData(){[tasks,inbox,approvals]=await Promise.all([work.listTaskHistory(),work.listInbox(),work.listApprovals()]);}
 async function renderKpis(){
   const completed=tasks.filter(task=>task.status==="completed");
@@ -226,7 +226,7 @@ async function actOnInbox(id:string,action:string){
 async function assign(){if(running)return;const title=taskInput.value.trim();if(!title){composerFeedback.textContent="Enter a task or choose a scenario first.";return;}composerFeedback.textContent="";const routed=routeDashboardTask(title);if(routed.intent==="unsupported"){await createBlocked(title,routed.reason??"Unsupported capability");return;}if(routed.intent==="approval-demo"){await createApprovalScenario(title,routed.customerQuery??"ACME");return;}await executeRouted(title,routed.intent,routed.customerQuery);}
 function openDrawer(){trustDrawer.classList.add("open");drawerOverlay.classList.add("open");closeTrustDrawerButton.focus();}
 function closeDrawer(){trustDrawer.classList.remove("open");drawerOverlay.classList.remove("open");openTrustDrawerButton.focus();}
-async function refreshAfterReset(message:string){await renderAll();resetWorkspace(false);composerFeedback.textContent=message;}
+async function refreshAfterReset(message:string){await renderAll();resetWorkspace(true,false);composerFeedback.textContent=message;}
 
 function bindEvents(){
   form.addEventListener("submit",event=>{event.preventDefault();void assign();});
@@ -259,5 +259,5 @@ export async function bootstrapDashboard(){
   datasetSnapshot.textContent=`Demo Business Data · ${DEMO_COMPANY_NAME} · Snapshot ${dateLabel()} · Local IndexedDB`;
   businessDataDetail.textContent=`${DEMO_COMPANY_NAME} · demo-business-v1 · Snapshot ${dateLabel()}`;
   await initializeBusinessWorld();bindEvents();await renderAll();
-  if(tasks[0])await renderTaskDetail(tasks[0].id);else resetWorkspace(false);
+  if(tasks[0])await renderTaskDetail(tasks[0].id);else resetWorkspace(false,false);
 }

@@ -4,7 +4,7 @@ const html=readFileSync("index.html","utf8"), main=readFileSync("src/browser/mai
 describe("Business World browser production contract",()=>{
   it("stays fresh until explicit assignment",()=>{expect(html).toContain('id="task-input" value=""');expect(html).toContain('id="work-count" class="meta">0 tasks');expect(controller).not.toMatch(/assign\(\)\s*;\s*$/m);expect(html).toContain("Nothing runs until you press Assign.");
     expect(controller).toContain("await initializeBusinessWorld()");
-    expect(controller).toContain("resetWorkspace(false)");});
+    expect(controller).toContain("resetWorkspace(false,false)");expect(controller).toContain("if(clearComposer)taskInput.value=\"\"");});
   it("uses repository modules and a thin main entry",()=>{expect(main).toContain("bootstrapDashboard");expect(main.length).toBeLessThan(1000);expect(controller).toContain("IndexedDbBusinessRepository");expect(controller).toContain("IndexedDbWorkRepository");expect(db).toContain('customers:"customers"');expect(db).toContain('taskEvents:"taskEvents"');expect(db).toContain('evidence:"evidence"');});
   it("supports capability routing beyond ACME",()=>{for(const intent of ["customer.lookup","receivables.review","payments.reconcile","followup.prepare","exceptions.review","portfolio.overdue","daily.brief"])expect(router).toContain(intent);expect(html).toContain("Check Beacon account");expect(router).toContain("unsupported");});
   it("separates employee activity from seeded business snapshot",()=>{expect(html).toContain("Employee Activity");expect(html).toContain("Business Snapshot · Demo Business Data");expect(html).toContain('id="snapshot-open"');expect(html).toContain('id="kpi-completed">0');});

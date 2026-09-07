@@ -37,6 +37,9 @@ describe("PWA standard contract", () => {
     expect(sw).toContain('event.data?.type === "SKIP_WAITING"');
     expect(sw).toContain('event.data?.type === "GET_VERSION"');
     expect(client).toContain('registration.waiting');
+    expect(client).toContain('registration.waiting) {');
+    expect(client).toContain('updateAcceptedByUser = true');
+    expect(client).toContain('!updateAcceptedByUser');
     expect(client).toContain('updatefound');
     expect(client).toContain('waitingWorker.postMessage({ type: "SKIP_WAITING" })');
     expect(client).toContain('navigator.serviceWorker.addEventListener("controllerchange"');

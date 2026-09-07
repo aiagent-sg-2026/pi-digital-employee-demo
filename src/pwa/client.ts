@@ -59,6 +59,7 @@ export async function bootstrapPwa(): Promise<void> {
 
   let installPrompt: BeforeInstallPromptEvent | null = null;
   let waitingWorker: ServiceWorker | null = null;
+  let updateAcceptedByUser = false;
   let reloadingForUpdate = false;
 
   const setPwaStatus = (text: string) => {
@@ -90,7 +91,9 @@ export async function bootstrapPwa(): Promise<void> {
     const installing = registration.installing;
     if (!installing) return;
     installing.addEventListener("statechange", () => {
-      if (installing.state === "installed" && navigator.serviceWorker.controller) void showWaitingWorker(registration.waiting ?? installing);
+      if (installing.state === "installed" && navigator.serviceWorker.controller && registration.waiting) {
+        void showWaitingWorker(registration.waiting);
+      }
     });
   };
 
@@ -135,6 +138,7 @@ export async function bootstrapPwa(): Promise<void> {
 
   updateNow?.addEventListener("click", () => {
     if (!waitingWorker) return;
+    updateAcceptedByUser = true;
     updateNow.disabled = true;
     updateNow.textContent = "Updating…";
     waitingWorker.postMessage({ type: "SKIP_WAITING" });
@@ -142,7 +146,7 @@ export async function bootstrapPwa(): Promise<void> {
   updateLater?.addEventListener("click", hideUpdate);
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (reloadingForUpdate || !waitingWorker) return;
+    if (reloadingForUpdate || !updateAcceptedByUser) return;
     reloadingForUpdate = true;
     window.location.reload();
   });
