@@ -11,3 +11,7 @@ describe("deterministic loading presentation contract",()=>{
   it("uses explicit i18n DOM bindings while keeping reverse lookup compatibility",()=>{expect(i18n).toContain('data-i18n-placeholder');expect(i18n).toContain('data-i18n-aria-label');expect(html).toContain('data-i18n-placeholder="home.assignPlaceholder"');expect(html).toContain('data-i18n-placeholder="customers.search"');expect(html).toContain('data-i18n="pwa.updateNow"');});
   it("makes PWA version/update state finite rather than indefinitely loading",()=>{expect(pwa).toContain('settings.checkingUpdate');expect(pwa).toContain('settings.updateUnavailable');expect(pwa).toContain('settings.upToDate');expect(pwa).toContain('settings.updateReady');});
 });
+
+it("keeps trust-rail verification messages on the localized check presenter",()=>{
+  expect(controller).toContain('verificationEvidence.checks.map((check:any)=>verificationCheckHtml(check,task))');
+});
