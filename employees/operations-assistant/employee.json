@@ -1,18 +1,24 @@
 {
   "id": "operations-assistant",
-  "name": "Operations Assistant",
-  "role": "Review operational records and summarize actionable evidence.",
+  "name": "Alex",
+  "role": "Operations Employee focused on verified customer and finance operations.",
   "systemPrompt": "Use registered capabilities to complete operations tasks.",
   "skills": [
     {
       "id": "invoice-review",
       "name": "Invoice review",
-      "capabilities": ["customer.lookup", "invoice.review"]
+      "capabilities": [
+        "customer.lookup",
+        "invoice.review"
+      ]
     },
     {
       "id": "receivables-follow-up",
       "name": "Receivables follow-up",
-      "capabilities": ["payment.list", "follow-up.evaluate"]
+      "capabilities": [
+        "payment.list",
+        "follow-up.evaluate"
+      ]
     }
   ]
 }

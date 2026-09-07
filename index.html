@@ -1,182 +1,62 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="data:," />
-    <meta name="description" content="Portable Pi Digital Employee demo: verified receivables workflow running directly in the browser." />
-    <title>Pi Digital Employee Demo</title>
-    <style>
-      :root {
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: #eef2ff;
-        background: #080c16;
-        color-scheme: dark;
-      }
-      * { box-sizing: border-box; }
-      body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 18% 0%, #1a2b53 0, #0a1020 34%, #080c16 72%); }
-      button, input { font: inherit; }
-      button:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #7f95ff55; outline-offset: 2px; }
-      .shell { width: min(1240px, calc(100% - 36px)); margin: 0 auto; padding: 48px 0 56px; }
-      .hero { display: flex; justify-content: space-between; gap: 28px; align-items: end; margin-bottom: 26px; }
-      .eyebrow { color: #91a7ff; font-size: 12px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
-      h1 { font-size: clamp(38px, 6vw, 64px); line-height: .98; margin: 10px 0 14px; letter-spacing: -.045em; }
-      .hero p { max-width: 760px; color: #b0bad0; margin: 0; line-height: 1.68; font-size: 15px; }
-      .runtime { border: 1px solid #31405f; background: #10182aaa; padding: 12px 15px; border-radius: 15px; color: #aeb8cf; white-space: nowrap; box-shadow: inset 0 1px #ffffff08; }
-      .runtime strong { color: #fff; display: block; margin-top: 4px; }
-
-      .task-panel { border: 1px solid #2a3652; background: #0d1424cc; border-radius: 20px; padding: 16px; margin-bottom: 18px; }
-      .task-meta { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 10px; }
-      .task-meta label { font-size: 14px; font-weight: 800; }
-      .task-meta small { color: #8390aa; line-height: 1.45; text-align: right; }
-      .taskbar { display: flex; gap: 10px; }
-      .taskbar input { flex: 1; min-width: 0; border: 1px solid #33415f; background: #0a1120; color: #fff; padding: 14px 16px; border-radius: 14px; outline: none; }
-      .taskbar input:focus { border-color: #7b92ff; box-shadow: 0 0 0 3px #6f83ff22; }
-      .taskbar button { border: 0; border-radius: 14px; padding: 14px 22px; background: #e5eaff; color: #10152a; font-weight: 850; cursor: pointer; white-space: nowrap; }
-      .taskbar button:disabled { opacity: .55; cursor: wait; }
-      .quick-cases { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
-      .quick-cases > span { color: #7786a3; font-size: 12px; margin-right: 2px; }
-      .quick-case { border: 1px solid #2d3b59; background: #121b2d; color: #bdc8dd; padding: 7px 10px; border-radius: 999px; cursor: pointer; font-size: 12px; }
-      .quick-case:hover { border-color: #6178be; color: #fff; }
-
-      .phase-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 18px; }
-      .phase-item { border: 1px solid #27334e; background: #0e1524b8; border-radius: 14px; padding: 11px 13px; display: flex; align-items: center; gap: 10px; color: #7f8da8; min-width: 0; }
-      .phase-dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: #1d2941; color: #8190af; font-size: 11px; font-weight: 900; flex: 0 0 auto; }
-      .phase-item strong { display: block; color: #aebad0; font-size: 12px; }
-      .phase-item small { display: block; margin-top: 2px; font-size: 11px; color: #74819b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .phase-item[data-state="active"] { border-color: #536cbe; background: #15203a; }
-      .phase-item[data-state="active"] .phase-dot { background: #314c91; color: #dce5ff; }
-      .phase-item[data-state="done"] { border-color: #285443; background: #10241f; }
-      .phase-item[data-state="done"] .phase-dot { background: #1e5b45; color: #9ff0cd; }
-      .phase-item[data-state="done"] strong { color: #c7f5e2; }
-
-      .grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 18px; }
-      .card { border: 1px solid #293651; background: #0e1524de; border-radius: 20px; padding: 21px; box-shadow: 0 24px 68px #0005, inset 0 1px #ffffff05; }
-      .card-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 15px; }
-      .card h2 { margin: 0; font-size: 15px; letter-spacing: -.01em; }
-      .section-title { margin-top: 24px !important; margin-bottom: 12px !important; }
-      .state-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 18px; }
-      #task-state { font-size: 11px; font-weight: 900; letter-spacing: .08em; border-radius: 999px; padding: 7px 10px; background: #202a42; }
-      #task-state[data-tone="running"] { background: #24345d; color: #b9c7ff; }
-      #task-state[data-tone="pass"] { background: #163d31; color: #8cf0c6; }
-      #task-state[data-tone="warn"] { background: #4a3718; color: #ffd88a; }
-      #task-state[data-tone="fail"] { background: #4a2027; color: #ffadb8; }
-      .meta-pill { border: 1px solid #2b3854; background: #111a2b; color: #8998b3; border-radius: 999px; padding: 5px 8px; font-size: 11px; white-space: nowrap; }
-      .meta-pill[data-tone="pass"] { border-color: #2c5947; color: #92e8c4; background: #10251f; }
-      .summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-      .summary-grid div { padding: 15px; border-radius: 14px; background: #141d2f; min-height: 82px; border: 1px solid #1e2a42; }
-      .summary-grid span { display: block; color: #8493ae; font-size: 12px; margin-bottom: 7px; }
-      .summary-grid strong { font-size: 17px; line-height: 1.3; }
-      .steps, .verification { list-style: none; padding: 0; margin: 0; display: grid; gap: 9px; }
-      .steps li, .verification li { display: flex; align-items: center; gap: 11px; padding: 12px; background: #121b2d; border: 1px solid #1c2940; border-radius: 13px; }
-      .step-index { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; background: #253758; color: #c0cceb; font-size: 11px; flex: 0 0 auto; }
-      .step-copy { min-width: 0; flex: 1; }
-      .step-copy span { display: block; color: #e6ebf8; font-size: 13px; font-weight: 700; }
-      .step-copy code { display: block; color: #7789ab; font-size: 10px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; }
-      .step-status { color: #7fe0b9; font-size: 10px; text-transform: uppercase; font-weight: 850; letter-spacing: .05em; }
-      .verification li > span { width: 25px; height: 25px; border-radius: 50%; display: grid; place-items: center; background: #244133; color: #8cf0c6; font-weight: 900; flex: 0 0 auto; }
-      .verification li[data-pass="false"] > span { background: #4a2b2f; color: #ffabb4; }
-      .verification strong { display: block; font-size: 12px; line-height: 1.35; word-break: break-word; }
-      .verification small { display: block; color: #9da9c2; margin-top: 4px; line-height: 1.4; }
-      .gateway { margin-top: 12px; color: #95a2bc; font-size: 12px; line-height: 1.5; padding: 10px 11px; border-radius: 11px; background: #0b1220; border: 1px solid #1d2940; }
-      .ai-summary { color: #d6dded; line-height: 1.68; min-height: 44px; font-size: 14px; }
-      .ai-summary h3 { font-size: 15px; margin: 16px 0 8px; color: #f3f6ff; }
-      .ai-summary p { margin: 8px 0; }
-      .ai-summary ul, .ai-summary ol { margin: 8px 0 8px 21px; padding: 0; }
-      .ai-summary li { margin: 6px 0; }
-      .ai-summary strong { color: #fff; }
-      .ai-summary code { color: #b9c8ef; background: #151f33; padding: 2px 5px; border-radius: 5px; font-size: .9em; }
-
-      .raw-card { margin-top: 18px; padding: 0; overflow: hidden; }
-      .raw-card summary { cursor: pointer; color: #c1cbdd; font-size: 13px; font-weight: 750; padding: 16px 20px; user-select: none; }
-      .raw-card[open] summary { border-bottom: 1px solid #24314b; }
-      .raw-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px 0; }
-      .raw-tools span { color: #7886a1; font-size: 11px; }
-      .secondary-button { border: 1px solid #32405f; background: #121b2c; color: #c6d0e2; border-radius: 10px; padding: 7px 10px; cursor: pointer; font-size: 12px; }
-      .secondary-button:hover { border-color: #647ac0; color: #fff; }
-      pre { overflow: auto; max-height: 360px; margin: 12px 18px 18px; padding: 14px; border-radius: 12px; background: #070c15; color: #b6c5e8; font-size: 11px; line-height: 1.55; border: 1px solid #182238; }
-
-      .trust-strip { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-      .trust-strip span { border: 1px solid #26334d; background: #0d1422; color: #8290aa; border-radius: 999px; padding: 7px 10px; font-size: 11px; }
-      .footer { margin-top: 12px; color: #69758e; font-size: 11px; text-align: center; }
-      .empty-copy { color: #8f9bb4; line-height: 1.6; margin: 0; }
-
-      @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
-      @media (max-width: 720px) {
-        .shell { width: min(100% - 24px, 1240px); padding-top: 28px; }
-        .hero { align-items: start; flex-direction: column; margin-bottom: 20px; }
-        .runtime { white-space: normal; }
-        .task-meta { align-items: start; flex-direction: column; gap: 4px; }
-        .task-meta small { text-align: left; }
-        .taskbar { flex-direction: column; }
-        .taskbar button { width: 100%; }
-        .phase-strip { grid-template-columns: 1fr; }
-        .summary-grid { grid-template-columns: 1fr; }
-        .card { padding: 17px; }
-      }
-    </style>
-  </head>
-  <body>
-    <main class="shell">
-      <header class="hero">
-        <div>
-          <div class="eyebrow">Portable AI Employee · Phase 3</div>
-          <h1>Operations Assistant</h1>
-          <p>One employee definition, one verified task contract, running browser-first. Business completion is deterministic; the LLM only summarizes facts after verification passes.</p>
-        </div>
-        <div class="runtime">Runtime<strong>Browser · GitHub Pages</strong></div>
-      </header>
-
-      <section class="task-panel" aria-labelledby="task-label">
-        <div class="task-meta">
-          <label id="task-label" for="customer-query">Customer to review</label>
-          <small>Try a verified success path or a review-required path.</small>
-        </div>
-        <form id="task-form" class="taskbar">
-          <input id="customer-query" value="ACME" aria-describedby="task-hint" placeholder="Customer, e.g. ACME" autocomplete="off" />
-          <button id="run-task" type="submit">Run employee task</button>
-        </form>
-        <div class="quick-cases" id="task-hint">
-          <span>Quick cases</span>
-          <button class="quick-case" type="button" data-query="ACME">ACME · verified success</button>
-          <button class="quick-case" type="button" data-query="NO-SUCH-CUSTOMER">Unknown · needs review</button>
-        </div>
-      </section>
-
-      <section class="phase-strip" aria-label="Task progress">
-        <div class="phase-item" data-phase="business" data-state="idle"><span class="phase-dot">1</span><div><strong>Execute</strong><small>Business capabilities</small></div></div>
-        <div class="phase-item" data-phase="verify" data-state="idle"><span class="phase-dot">2</span><div><strong>Verify</strong><small>Deterministic gate</small></div></div>
-        <div class="phase-item" data-phase="ai" data-state="idle"><span class="phase-dot">3</span><div><strong>Summarize</strong><small>demo-auto after PASS</small></div></div>
-      </section>
-
-      <section class="grid">
-        <article class="card">
-          <div class="state-row"><h2>Verified result</h2><span id="task-state" data-tone="idle" aria-live="polite">CREATED</span></div>
-          <div id="summary"><p class="empty-copy">Ready to review a customer.</p></div>
-          <div class="card-title section-title"><h2>Execution evidence</h2><span id="step-count" class="meta-pill">0 steps</span></div>
-          <ol id="steps" class="steps"></ol>
-        </article>
-
-        <article class="card">
-          <div class="card-title"><h2>Verification gate</h2><span id="verification-count" class="meta-pill">0 checks</span></div>
-          <ul id="verification" class="verification"></ul>
-          <div class="card-title section-title"><h2>AI follow-up summary</h2><span id="ai-model" class="meta-pill">demo-auto</span></div>
-          <div id="ai-summary" class="ai-summary" aria-live="polite"><p class="empty-copy">Generated only after deterministic verification passes.</p></div>
-          <div id="gateway-status" class="gateway" aria-live="polite">Gateway not called until verification passes.</div>
-        </article>
-      </section>
-
-      <details class="card raw-card">
-        <summary>Raw evidence · technical audit view</summary>
-        <div class="raw-tools"><span>Structured evidence emitted by the employee workflow.</span><button id="copy-evidence" class="secondary-button" type="button">Copy JSON</button></div>
-        <pre id="evidence"></pre>
-      </details>
-
-      <div class="trust-strip" aria-label="Demo trust boundaries">
-        <span>No API key</span><span>Short-lived memory-only token</span><span>Read-only business demo</span><span>Deterministic completion gate</span>
-      </div>
-      <div class="footer">The LLM summarizes verified facts; it does not decide business completion.</div>
-    </main>
-    <script type="module" src="/src/browser/main.ts"></script>
-  </body>
-</html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<meta name="description" content="Digital Employee Dashboard: assign work, review verified results, and inspect evidence." />
+<title>Alex · Digital Employee</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1f2937;background:#f6f7f9;color-scheme:light;--bg:#f6f7f9;--surface:#fff;--border:#e5e7eb;--border-strong:#d1d5db;--muted:#6b7280;--subtle:#9ca3af;--brand:#2759d6;--brand-soft:#eef3ff;--green:#137a50;--green-soft:#ecfdf5;--amber:#9a6700;--amber-soft:#fff8e6;--red:#b42318;--red-soft:#fef3f2;--blue-soft:#eff6ff;--radius:12px}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-height:100vh;background:var(--bg);color:#1f2937}button,input{font:inherit}button{cursor:pointer}button:disabled{cursor:wait;opacity:.58}a{color:inherit;text-decoration:none}
+.app{min-height:100vh;display:grid;grid-template-columns:220px minmax(0,1fr) 310px}.sidebar{position:sticky;top:0;height:100vh;background:#fff;border-right:1px solid var(--border);padding:22px 14px;display:flex;flex-direction:column;gap:18px}.brand{display:flex;gap:10px;align-items:center;padding:2px 8px 14px}.brand-mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#1f2937;color:#fff;font-weight:800;font-size:13px}.brand strong{display:block;font-size:14px}.brand small{color:var(--muted);font-size:11px}.nav-group{display:grid;gap:4px}.nav-title{padding:9px 10px 5px;color:var(--subtle);font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.nav-link{min-height:38px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;color:#4b5563;font-size:13px;font-weight:650}.nav-link:hover{background:#f3f4f6;color:#111827}.nav-link.active{background:var(--brand-soft);color:#1d4ed8}.nav-icon{width:18px;text-align:center;color:#7c8799}.badge{margin-left:auto;min-width:20px;padding:2px 6px;border-radius:999px;text-align:center;font-size:10px;font-weight:800;background:#eef2f7;color:#64748b}.badge.attention{background:var(--amber-soft);color:var(--amber)}.sidebar-foot{margin-top:auto;padding:12px 10px 2px;color:var(--muted);font-size:10px;line-height:1.55;border-top:1px solid var(--border)}
+.main{min-width:0;padding:0 28px 56px}.topbar{min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--border)}.employee-mini,.employee-card{display:flex;gap:10px;align-items:center}.avatar{width:36px;height:36px;border-radius:50%;background:#e8eefc;color:#244aa5;display:grid;place-items:center;font-weight:800;font-size:13px}.employee-mini strong{display:block;font-size:13px}.employee-mini small{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:11px;margin-top:2px}.online-dot{width:7px;height:7px;border-radius:50%;background:#22a06b;box-shadow:0 0 0 3px #d9f5e8}.header-actions{display:flex;gap:7px;align-items:center}.icon-btn,.secondary-btn,.primary-btn,.chip-btn{border:1px solid var(--border);background:#fff;color:#374151;border-radius:9px;min-height:36px;padding:8px 11px;font-size:12px;font-weight:700}.icon-btn{width:36px;padding:0;display:grid;place-items:center}.primary-btn{border-color:#1f4fc2;background:var(--brand);color:#fff;padding-inline:14px}.primary-btn:hover{background:#1f4fc2}.secondary-btn:hover,.icon-btn:hover,.chip-btn:hover{background:#f9fafb;border-color:var(--border-strong)}
+.hero{padding:30px 0 18px}.hero-kicker{color:var(--muted);font-size:12px;font-weight:700}.hero h1{margin:5px 0 6px;font-size:clamp(25px,3vw,34px);letter-spacing:-.025em}.hero>p{margin:0;color:var(--muted);font-size:14px}.assignment{margin-top:20px;border:1px solid var(--border);border-radius:14px;background:#fff;box-shadow:0 1px 2px #1118270a}.assignment-main{display:flex;gap:10px;padding:12px}.assignment input{min-width:0;flex:1;border:0;outline:none;padding:10px 8px;color:#111827;font-size:14px}.assignment-foot{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:10px 12px;border-top:1px solid #f0f1f3;color:var(--muted);font-size:11px}.quick-actions{display:flex;flex-wrap:wrap;gap:7px}.chip-btn{min-height:30px;padding:5px 9px;border-radius:999px;font-size:10px;font-weight:650}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:4px 0 18px}.kpi{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:14px}.kpi span{color:var(--muted);font-size:11px;display:block}.kpi strong{display:block;font-size:21px;margin:6px 0 2px;letter-spacing:-.02em}.kpi small{color:var(--subtle);font-size:10px}
+.section,.rail-section{background:#fff;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}.section{margin-top:12px}.section-head{min-height:54px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 16px;border-bottom:1px solid var(--border)}.section-head h2{margin:0;font-size:14px}.section-head p{margin:3px 0 0;color:var(--muted);font-size:10px}.meta{color:var(--muted);font-size:10px}.work-table{width:100%;border-collapse:collapse}.work-table th,.work-table td{text-align:left;padding:12px 16px;border-bottom:1px solid #f0f1f3;font-size:11px;vertical-align:middle}.work-table th{color:var(--muted);font-size:10px;font-weight:700;background:#fcfcfd}.work-table tr:last-child td{border-bottom:0}.task-name{font-size:12px;font-weight:750;color:#111827}.task-context{color:var(--muted);margin-top:3px;font-size:10px}.status-chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:800;white-space:nowrap}.status-chip.running{background:var(--blue-soft);color:#1d4ed8}.status-chip.completed{background:var(--green-soft);color:var(--green)}.status-chip.review{background:var(--amber-soft);color:var(--amber)}.status-chip.failed{background:var(--red-soft);color:var(--red)}.progress-copy{color:#4b5563}.link-btn{border:0;background:transparent;color:#2458ce;padding:0;font-size:10px;font-weight:750}.empty-row{color:var(--muted);text-align:center!important;padding:26px 16px!important}
+.brief{padding:16px;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:start}.brief h3{margin:0 0 6px;font-size:13px}.brief p{margin:0;color:#4b5563;font-size:12px;line-height:1.6}.brief-list{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:7px 14px}.brief-list li{font-size:10px;color:var(--muted)}.brief-list b{color:#374151}.brief-note{background:var(--green-soft);color:var(--green);border-radius:9px;padding:8px 10px;font-size:10px;font-weight:750;white-space:nowrap}
+.detail{scroll-margin-top:14px}.detail-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)}.detail-pane{padding:16px;min-width:0}.detail-pane+.detail-pane{border-left:1px solid var(--border)}.detail-title{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.detail-title h3{margin:0;font-size:12px}.detail-title span{color:var(--muted);font-size:9px}.result-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.result-cell{border:1px solid #edf0f3;background:#f9fafb;border-radius:10px;padding:11px}.result-cell span{display:block;font-size:9px;color:var(--muted);margin-bottom:5px}.result-cell strong{font-size:13px}.check-list,.activity-list{list-style:none;margin:0;padding:0;display:grid;gap:7px}.check-list li,.activity-list li{display:flex;gap:9px;align-items:flex-start;font-size:10px;color:#374151}.check-icon,.activity-icon{width:18px;height:18px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:900}.check-icon{background:var(--green-soft);color:var(--green)}.check-list li[data-pass="false"] .check-icon{background:var(--red-soft);color:var(--red)}.activity-icon.done{background:var(--green-soft);color:var(--green)}.activity-icon.active{background:var(--brand-soft);color:var(--brand)}.activity-icon.idle{background:#f3f4f6;color:#9ca3af}.activity-copy strong{display:block;font-size:10px}.activity-copy small{color:var(--muted);font-size:9px}.evidence-details{border-top:1px solid var(--border)}.evidence-details summary{cursor:pointer;padding:12px 16px;list-style:none;display:flex;justify-content:space-between;gap:12px;color:#374151;font-size:10px;font-weight:750}.evidence-details summary::-webkit-details-marker{display:none}.evidence-body{padding:0 16px 16px}.evidence-body pre{margin:0;max-height:320px;overflow:auto;border-radius:10px;background:#111827;color:#d1d5db;padding:12px;font-size:9px;line-height:1.55}.evidence-tools{display:flex;justify-content:flex-end;margin-bottom:8px}.ai-card{margin-top:12px;padding:13px;background:#fbfcff;border:1px solid #e5eaf5;border-radius:10px}.ai-card h4{margin:0 0 7px;font-size:11px}.ai-summary{font-size:10px;color:#4b5563;line-height:1.6}.ai-summary h3{margin:10px 0 5px;font-size:11px;color:#1f2937}.ai-summary p{margin:5px 0}.ai-summary ul,.ai-summary ol{margin:5px 0 5px 16px;padding:0}.gateway-status{margin-top:8px;color:var(--muted);font-size:9px}
+.right-rail{position:sticky;top:0;height:100vh;overflow:auto;border-left:1px solid var(--border);background:#fbfbfc;padding:18px 16px 30px}.rail-section{margin-bottom:12px}.rail-head{padding:12px 13px;border-bottom:1px solid var(--border)}.rail-head h3{margin:0;font-size:12px}.rail-head p{margin:3px 0 0;color:var(--muted);font-size:9px}.rail-body{padding:13px}.employee-card .avatar{width:42px;height:42px}.employee-card strong{font-size:12px;display:block}.employee-card small{color:var(--muted);font-size:9px;display:block;margin-top:2px}.employee-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.employee-meta div{padding:8px;background:#fafafa;border-radius:8px}.employee-meta span{display:block;color:var(--muted);font-size:8px}.employee-meta strong{display:block;font-size:9px;margin-top:3px}.connection-list,.inbox-list{list-style:none;padding:0;margin:0;display:grid;gap:8px}.connection-list li,.inbox-list li{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:10px}.connection-copy strong,.inbox-copy strong{display:block;font-size:10px}.connection-copy small,.inbox-copy small{display:block;color:var(--muted);font-size:8px;margin-top:2px}.connection-state{font-size:8px;font-weight:800;color:var(--green)}.connection-state.demo{color:var(--amber)}.connection-state.off{color:#9ca3af}.approval-empty{padding:4px 0;color:var(--muted);font-size:10px;line-height:1.55}.attention-box{background:var(--amber-soft);border:1px solid #fde8b2;color:#7a4e00;border-radius:9px;padding:9px;font-size:9px;line-height:1.5}.trust-strip{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}.trust-strip span{border:1px solid var(--border);background:#fff;border-radius:999px;padding:5px 8px;color:var(--muted);font-size:8px}
+@media(max-width:1120px){.app{grid-template-columns:190px minmax(0,1fr)}.right-rail{position:static;height:auto;grid-column:2;border-left:0;border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.rail-section{margin:0}}
+@media(max-width:760px){.app{display:block}.sidebar{position:static;height:auto;padding:10px 12px;border-right:0;border-bottom:1px solid var(--border)}.brand{padding-bottom:6px}.nav-group{display:flex;overflow-x:auto;gap:5px;padding-bottom:2px}.nav-title,.sidebar-foot{display:none}.nav-link{flex:0 0 auto;min-height:34px;padding:7px 9px}.main{padding:0 14px 36px}.topbar{min-height:62px}.employee-mini{display:none}.header-actions .icon-btn:nth-child(-n+2){display:none}.hero{padding-top:22px}.assignment-main{flex-direction:column}.assignment-foot{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.work-table th:nth-child(2),.work-table td:nth-child(2),.work-table th:nth-child(4),.work-table td:nth-child(4){display:none}.brief{grid-template-columns:1fr}.brief-note{justify-self:start}.detail-grid,.result-grid{grid-template-columns:1fr}.detail-pane+.detail-pane{border-left:0;border-top:1px solid var(--border)}.right-rail{display:block;padding:14px}.rail-section{margin-bottom:10px}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar" aria-label="Primary navigation">
+<div class="brand"><div class="brand-mark">DE</div><div><strong>Digital Employee</strong><small>Operations workspace</small></div></div>
+<nav class="nav-group" aria-label="Main"><div class="nav-title">Main</div>
+<a class="nav-link active" href="#home"><span class="nav-icon">⌂</span>Home</a>
+<a class="nav-link" href="#my-work"><span class="nav-icon">◫</span>My Work</a>
+<a class="nav-link" href="#inbox"><span class="nav-icon">✉</span>Inbox <span id="inbox-badge" class="badge">0</span></a>
+<a class="nav-link" href="#approvals"><span class="nav-icon">✓</span>Approvals <span id="approval-badge" class="badge">0</span></a>
+<a class="nav-link" href="#customers"><span class="nav-icon">◎</span>Customers</a>
+<a class="nav-link" href="#my-work"><span class="nav-icon">□</span>Tasks</a>
+<a class="nav-link" href="#my-work"><span class="nav-icon">↺</span>History</a></nav>
+<nav class="nav-group" aria-label="Employee"><div class="nav-title">Employee</div>
+<a class="nav-link" href="#employee-status"><span class="nav-icon">◇</span>Skills</a>
+<a class="nav-link" href="#connections"><span class="nav-icon">⇄</span>Connections</a>
+<a class="nav-link" href="#employee-status"><span class="nav-icon">⚙</span>Settings</a></nav>
+<div class="sidebar-foot">Verified completion only.<br/>Technical evidence stays available for audit.</div>
+</aside>
+<main class="main" id="home">
+<header class="topbar"><div class="employee-mini"><div class="avatar">A</div><div><strong>Alex</strong><small><span class="online-dot"></span>Operations Employee · Online</small></div></div>
+<div class="header-actions"><button class="icon-btn" id="search-task" type="button" aria-label="Search or focus task">⌕</button><button class="icon-btn" id="open-inbox" type="button" aria-label="Open inbox">◌</button><button class="icon-btn" id="open-settings" type="button" aria-label="Open employee settings">⚙</button><button class="primary-btn" id="new-task" type="button">New Task</button></div></header>
+<section class="hero"><div class="hero-kicker">Good morning</div><h1>I can handle your customer and finance operations.</h1><p>Assign work, review what Alex completed, and step in only when a decision is needed.</p>
+<form id="task-form" class="assignment"><div class="assignment-main"><input id="task-input" value="Review ACME outstanding invoices and prepare follow-up actions." aria-label="Task to assign" placeholder="Ask Alex to handle a task..." autocomplete="off"/><button id="assign-task" class="primary-btn" type="submit">Assign task</button></div>
+<div class="assignment-foot"><div class="quick-actions" aria-label="Quick actions"><button class="chip-btn quick-task" type="button" data-task="Review ACME overdue invoices and prepare follow-up actions.">Review overdue invoices</button><button class="chip-btn quick-task" type="button" data-task="Prepare ACME customer follow-up based on verified receivables.">Prepare customer follow-up</button><button class="chip-btn quick-task" type="button" data-task="Review Unknown customer receivables and report exceptions.">Check an exception case</button></div><span>Work-first: Alex verifies business completion before summarizing.</span></div></form></section>
+<section class="kpis" id="customers" aria-label="Session work summary"><div class="kpi"><span>Tasks completed</span><strong id="kpi-completed">0</strong><small>This session</small></div><div class="kpi"><span>Customers handled</span><strong id="kpi-customers">0</strong><small>This session</small></div><div class="kpi"><span>Outstanding reviewed</span><strong id="kpi-outstanding">SGD 0</strong><small>Verified amount</small></div><div class="kpi"><span>Need attention</span><strong id="kpi-attention">0</strong><small>Inbox items</small></div></section>
+<section class="section" id="my-work"><div class="section-head"><div><h2>My Work</h2><p>Alex's current work queue, not a chat history.</p></div><span id="work-count" class="meta">0 tasks</span></div><div style="overflow:auto"><table class="work-table"><thead><tr><th>Task</th><th>Company / Context</th><th>Status</th><th>Progress</th><th>Action</th></tr></thead><tbody id="work-body"><tr><td class="empty-row" colspan="5">Assign a task to start Alex's work queue.</td></tr></tbody></table></div></section>
+<section class="section" id="today-brief"><div class="section-head"><div><h2>Today's Brief</h2><p>A manager-style update from Alex.</p></div><span class="meta">Session brief</span></div><div class="brief"><div><h3 id="brief-title">Ready for work</h3><p id="brief-copy">No tasks have been assigned in this session yet.</p><ul id="brief-list" class="brief-list"></ul></div><div id="brief-note" class="brief-note">Available</div></div></section>
+<section class="section detail" id="task-detail"><div class="section-head"><div><h2>Latest Task</h2><p>Business result first, verification second, technical evidence third.</p></div><span id="detail-state" class="status-chip running">Ready</span></div>
+<div class="detail-grid"><div class="detail-pane"><div class="detail-title"><h3>Business Result</h3><span id="business-meta">No verified result yet</span></div><div id="business-result"><p class="approval-empty">Assign a task to see Alex's verified business result.</p></div><div class="ai-card"><h4>Employee Summary</h4><div id="ai-summary" class="ai-summary">Generated only after deterministic verification passes.</div><div id="gateway-status" class="gateway-status">Demo Gateway not called yet.</div></div></div>
+<div class="detail-pane"><div class="detail-title"><h3>Verification</h3><span id="verification-count">0 checks</span></div><ul id="verification-list" class="check-list"><li><span class="check-icon">·</span><div>Waiting for verified evidence.</div></li></ul></div></div>
+<details class="evidence-details" id="evidence-details"><summary><span>View Evidence</span><span>Developer / audit details</span></summary><div class="evidence-body"><div class="evidence-tools"><button id="copy-evidence" class="secondary-btn" type="button">Copy JSON</button></div><pre id="raw-evidence"></pre></div></details></section>
+</main>
+<aside class="right-rail" aria-label="Employee context">
+<section class="rail-section"><div class="rail-head"><h3>Current Activity</h3><p>Human-readable business activity.</p></div><div class="rail-body"><ul id="current-activity" class="activity-list"><li><span class="activity-icon idle">○</span><div class="activity-copy"><strong>Waiting for work</strong><small>Assign a task to Alex.</small></div></li></ul></div></section>
+<section class="rail-section" id="employee-status"><div class="rail-head"><h3>Employee Status</h3><p>Identity first, model details hidden.</p></div><div class="rail-body"><div class="employee-card"><div class="avatar">A</div><div><strong>Alex</strong><small>Operations Employee</small><small><span class="online-dot" style="display:inline-block;margin-right:6px"></span>Online</small></div></div><div class="employee-meta"><div><span>Current mode</span><strong id="employee-mode">Available</strong></div><div><span>Last updated</span><strong id="last-updated">Just now</strong></div></div></div></section>
+<section class="rail-section" id="inbox"><div class="rail-head"><h3>Inbox</h3><p>Items Alex needs you to notice.</p></div><div class="rail-body"><ul id="inbox-list" class="inbox-list"><li class="approval-empty">No items need attention.</li></ul></div></section>
+<section class="rail-section" id="approvals"><div class="rail-head"><h3>Approvals</h3><p>First-class decision handoff.</p></div><div class="rail-body"><div class="approval-empty">No approvals pending. This V1 demo is read-only and cannot perform business write actions.</div></div></section>
+<section class="rail-section" id="connections"><div class="rail-head"><h3>Connections</h3><p>Where Alex can work today.</p></div><div class="rail-body"><ul class="connection-list"><li><div class="connection-copy"><strong>Browser</strong><small>GitHub Pages runtime</small></div><span class="connection-state">Ready</span></li><li><div class="connection-copy"><strong>Demo Gateway</strong><small>demo-auto summary</small></div><span id="gateway-connection" class="connection-state">Ready</span></li><li><div class="connection-copy"><strong>Business Data</strong><small>Deterministic mock dataset</small></div><span class="connection-state demo">Demo</span></li><li><div class="connection-copy"><strong>Globe3 ERP</strong><small>Real business integration</small></div><span class="connection-state off">Not connected</span></li><li><div class="connection-copy"><strong>Gmail</strong><small>Customer communication</small></div><span class="connection-state off">Not connected</span></li></ul><div class="trust-strip"><span>No API key</span><span>Memory-only token</span><span>Read-only demo</span><span>Verified completion</span></div></div></section>
+</aside></div><script type="module" src="/src/browser/main.ts"></script></body></html>

@@ -1,269 +1,137 @@
 import { runOperationsEmployeeTask } from "../core";
-import {
-  createDemoGatewayClient,
-  DemoGatewayError,
-  DemoGatewayRateLimitError,
-} from "../shared/demo-gateway-client";
+import { createDemoGatewayClient, DemoGatewayError, DemoGatewayRateLimitError } from "../shared/demo-gateway-client";
 
-const form = document.querySelector<HTMLFormElement>("#task-form")!;
-const input = document.querySelector<HTMLInputElement>("#customer-query")!;
-const runButton = document.querySelector<HTMLButtonElement>("#run-task")!;
-const stateEl = document.querySelector<HTMLElement>("#task-state")!;
-const summaryEl = document.querySelector<HTMLElement>("#summary")!;
-const stepsEl = document.querySelector<HTMLElement>("#steps")!;
-const stepCountEl = document.querySelector<HTMLElement>("#step-count")!;
-const verificationEl = document.querySelector<HTMLElement>("#verification")!;
-const verificationCountEl = document.querySelector<HTMLElement>("#verification-count")!;
-const evidenceEl = document.querySelector<HTMLPreElement>("#evidence")!;
-const copyEvidenceButton = document.querySelector<HTMLButtonElement>("#copy-evidence")!;
-const aiEl = document.querySelector<HTMLElement>("#ai-summary")!;
-const gatewayEl = document.querySelector<HTMLElement>("#gateway-status")!;
-const quickCaseButtons = [...document.querySelectorAll<HTMLButtonElement>(".quick-case")];
-const phaseItems = [...document.querySelectorAll<HTMLElement>(".phase-item")];
+type WorkflowResult = Awaited<ReturnType<typeof runOperationsEmployeeTask>>;
+type WorkStatus = "Running" | "Completed" | "Needs Review" | "Failed";
+interface WorkItem { id:string; task:string; customerQuery:string; context:string; status:WorkStatus; progress:string; result?:WorkflowResult; aiHtml?:string; gatewayText?:string }
+interface InboxItem { id:string; title:string; detail:string }
 
-const gateway = createDemoGatewayClient({ origin: window.location.origin });
-let running = false;
+const form=document.querySelector<HTMLFormElement>("#task-form")!;
+const taskInput=document.querySelector<HTMLInputElement>("#task-input")!;
+const assignButton=document.querySelector<HTMLButtonElement>("#assign-task")!;
+const quickTaskButtons=[...document.querySelectorAll<HTMLButtonElement>(".quick-task")];
+const workBody=document.querySelector<HTMLTableSectionElement>("#work-body")!;
+const workCount=document.querySelector<HTMLElement>("#work-count")!;
+const detailState=document.querySelector<HTMLElement>("#detail-state")!;
+const businessResult=document.querySelector<HTMLElement>("#business-result")!;
+const businessMeta=document.querySelector<HTMLElement>("#business-meta")!;
+const verificationList=document.querySelector<HTMLElement>("#verification-list")!;
+const verificationCount=document.querySelector<HTMLElement>("#verification-count")!;
+const rawEvidence=document.querySelector<HTMLPreElement>("#raw-evidence")!;
+const copyEvidence=document.querySelector<HTMLButtonElement>("#copy-evidence")!;
+const aiSummary=document.querySelector<HTMLElement>("#ai-summary")!;
+const gatewayStatus=document.querySelector<HTMLElement>("#gateway-status")!;
+const gatewayConnection=document.querySelector<HTMLElement>("#gateway-connection")!;
+const currentActivity=document.querySelector<HTMLElement>("#current-activity")!;
+const employeeMode=document.querySelector<HTMLElement>("#employee-mode")!;
+const lastUpdated=document.querySelector<HTMLElement>("#last-updated")!;
+const inboxList=document.querySelector<HTMLElement>("#inbox-list")!;
+const inboxBadge=document.querySelector<HTMLElement>("#inbox-badge")!;
+const approvalBadge=document.querySelector<HTMLElement>("#approval-badge")!;
+const kpiCompleted=document.querySelector<HTMLElement>("#kpi-completed")!;
+const kpiCustomers=document.querySelector<HTMLElement>("#kpi-customers")!;
+const kpiOutstanding=document.querySelector<HTMLElement>("#kpi-outstanding")!;
+const kpiAttention=document.querySelector<HTMLElement>("#kpi-attention")!;
+const briefTitle=document.querySelector<HTMLElement>("#brief-title")!;
+const briefCopy=document.querySelector<HTMLElement>("#brief-copy")!;
+const briefList=document.querySelector<HTMLElement>("#brief-list")!;
+const briefNote=document.querySelector<HTMLElement>("#brief-note")!;
 
-const capabilityLabels: Record<string, string> = {
-  "customer.lookup": "Customer lookup",
-  "invoice.review": "Invoice review",
-  "payment.list": "Payment reconciliation",
-  "follow-up.evaluate": "Follow-up evaluation",
-  "execution.error": "Execution error",
+const gateway=createDemoGatewayClient({origin:window.location.origin});
+const work:WorkItem[]=[];
+const inbox:InboxItem[]=[];
+const handledCustomers=new Set<string>();
+let completedTasks=0;
+let outstandingReviewed=0;
+let running=false;
+let latestEvidence="";
+
+const capabilityLabels:Record<string,{title:string;detail:string}>={
+  "customer.lookup":{title:"Customer identified",detail:"Matched the business customer record."},
+  "invoice.review":{title:"Outstanding invoices reviewed",detail:"Applied payments, credits, and duplicate suppression."},
+  "payment.list":{title:"Payments reconciled",detail:"Checked canonical payment records."},
+  "follow-up.evaluate":{title:"Follow-up policy evaluated",detail:"Prepared the appropriate follow-up actions."},
 };
 
-type PhaseName = "business" | "verify" | "ai";
-type PhaseState = "idle" | "active" | "done";
-
-function setState(state: string, tone: "idle" | "running" | "pass" | "warn" | "fail" = "idle") {
-  stateEl.textContent = state;
-  stateEl.dataset.tone = tone;
+function escapeHtml(value:string):string{return value.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]!))}
+function inlineMarkdown(value:string):string{return escapeHtml(value).replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>")}
+function renderSafeMarkdown(value:string):string{
+  const lines=value.replace(/\r\n/g,"\n").split("\n");let html="";let list:"ul"|"ol"|null=null;
+  const close=()=>{if(list){html+=`</${list}>`;list=null}};
+  for(const raw of lines){const line=raw.trim();if(!line){close();continue}
+    if(line.startsWith("### ")||line.startsWith("## ")||line.startsWith("# ")){close();const text=line.replace(/^#{1,3}\s+/,"");html+=`<h3>${inlineMarkdown(text)}</h3>`;continue}
+    const u=line.match(/^[-*]\s+(.+)$/);if(u){if(list!=="ul"){close();html+="<ul>";list="ul"}html+=`<li>${inlineMarkdown(u[1]!)}</li>`;continue}
+    const o=line.match(/^\d+[.)]\s+(.+)$/);if(o){if(list!=="ol"){close();html+="<ol>";list="ol"}html+=`<li>${inlineMarkdown(o[1]!)}</li>`;continue}
+    close();html+=`<p>${inlineMarkdown(line)}</p>`;
+  }close();return html||"<p>No summary returned.</p>";
+}
+function extractAssistantText(body:unknown):string{if(!body||typeof body!=="object")return"";const choices=(body as{choices?:unknown}).choices;if(!Array.isArray(choices))return"";const first=choices[0] as{message?:{content?:unknown}}|undefined;return typeof first?.message?.content==="string"?first.message.content:""}
+function deriveCustomerQuery(task:string):string{if(/\bacme\b/i.test(task))return"ACME";if(/unknown|no[- ]?such|exception/i.test(task))return"NO-SUCH-CUSTOMER";return task.trim()}
+function taskTitle(task:string):string{const n=task.replace(/\s+/g," ").trim();return n.length>62?`${n.slice(0,59)}…`:n}
+function statusClass(status:WorkStatus):string{return status==="Completed"?"completed":status==="Needs Review"?"review":status==="Failed"?"failed":"running"}
+function renderWorkQueue():void{
+  workCount.textContent=`${work.length} ${work.length===1?"task":"tasks"}`;
+  if(!work.length){workBody.innerHTML='<tr><td class="empty-row" colspan="5">Assign a task to start Alex\'s work queue.</td></tr>';return}
+  workBody.innerHTML=work.map(item=>`<tr><td><div class="task-name">${escapeHtml(taskTitle(item.task))}</div><div class="task-context">${escapeHtml(item.customerQuery)}</div></td><td>${escapeHtml(item.context)}</td><td><span class="status-chip ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td><td class="progress-copy">${escapeHtml(item.progress)}</td><td><button class="link-btn view-task" type="button" data-task-id="${escapeHtml(item.id)}">View</button></td></tr>`).join("");
+}
+function renderActivity(evidence:readonly{type:string}[],state:string):void{
+  if(!evidence.length){currentActivity.innerHTML=`<li><span class="activity-icon ${state==="RUNNING"?"active":"idle"}">${state==="RUNNING"?"●":"○"}</span><div class="activity-copy"><strong>${state==="RUNNING"?"Working on assigned task":"Waiting for work"}</strong><small>${state==="RUNNING"?"Alex is executing business capabilities.":"Assign a task to Alex."}</small></div></li>`;return}
+  const steps=evidence.filter(i=>i.type!=="verification"&&i.type!=="execution.error");
+  currentActivity.innerHTML=steps.map(item=>{const label=capabilityLabels[item.type]??{title:item.type,detail:"Business capability completed."};return `<li><span class="activity-icon done">✓</span><div class="activity-copy"><strong>${escapeHtml(label.title)}</strong><small>${escapeHtml(label.detail)}</small></div></li>`}).join("");
+}
+function renderVerification(result:WorkflowResult):void{
+  const checks=result.verification.checks;const passed=checks.filter(c=>c.passed).length;
+  verificationCount.textContent=`${passed}/${checks.length} checks passed`;
+  verificationList.innerHTML=checks.map(c=>`<li data-pass="${c.passed}"><span class="check-icon">${c.passed?"✓":"!"}</span><div><strong>${escapeHtml(c.id)}</strong>${c.message?`<div style="color:#6b7280;margin-top:2px">${escapeHtml(c.message)}</div>`:""}</div></li>`).join("");
+}
+function renderBusinessResult(result:WorkflowResult):void{
+  if(!result.summary){businessMeta.textContent=result.task.state==="NEEDS_REVIEW"?"Decision required":"Task failed";businessResult.innerHTML=`<div class="attention-box">${result.task.state==="NEEDS_REVIEW"?"Alex could not verify a unique customer identity. Review the inbox item before business work continues.":"Alex could not complete this task. Review the evidence for the failure reason."}</div>`;return}
+  businessMeta.textContent=`${result.summary.outstandingInvoices} outstanding invoices · ${result.followUps.length} follow-up actions`;
+  businessResult.innerHTML=`<div class="result-grid"><div class="result-cell"><span>Customer</span><strong>${escapeHtml(result.summary.customer)}</strong></div><div class="result-cell"><span>Outstanding invoices</span><strong>${result.summary.outstandingInvoices}</strong></div><div class="result-cell"><span>Outstanding total</span><strong>${result.summary.currency} ${result.summary.outstandingTotal.toLocaleString("en-SG")}</strong></div><div class="result-cell"><span>Follow-up actions</span><strong>${result.followUps.length}</strong></div></div>`;
+}
+function setDetailState(state:string):void{const label=state==="NEEDS_REVIEW"?"Needs Review":state.charAt(0)+state.slice(1).toLowerCase();detailState.textContent=label;detailState.className=`status-chip ${state==="COMPLETED"?"completed":state==="NEEDS_REVIEW"?"review":state==="FAILED"?"failed":"running"}`}
+function renderInbox():void{
+  inboxBadge.textContent=String(inbox.length);inboxBadge.classList.toggle("attention",inbox.length>0);kpiAttention.textContent=String(inbox.length);
+  inboxList.innerHTML=inbox.length?inbox.map(i=>`<li><div class="inbox-copy"><strong>${escapeHtml(i.title)}</strong><small>${escapeHtml(i.detail)}</small></div><span class="status-chip review">Review</span></li>`).join(""):'<li class="approval-empty">No items need attention.</li>';
+}
+function updateKpis():void{kpiCompleted.textContent=String(completedTasks);kpiCustomers.textContent=String(handledCustomers.size);kpiOutstanding.textContent=`SGD ${outstandingReviewed.toLocaleString("en-SG")}`;kpiAttention.textContent=String(inbox.length)}
+function updateBrief():void{
+  if(!work.length){briefTitle.textContent="Ready for work";briefCopy.textContent="No tasks have been assigned in this session yet.";briefList.innerHTML="";briefNote.textContent="Available";return}
+  briefTitle.textContent=inbox.length?"One item needs your attention":"Operations are on track";
+  briefCopy.textContent=inbox.length?"Alex completed what could be verified and brought the unresolved item back to you.":"Alex has completed the assigned work in this session with deterministic verification.";
+  briefList.innerHTML=`<li>✓ <b>${completedTasks}</b> completed</li><li>✓ <b>${handledCustomers.size}</b> customers handled</li><li>✓ <b>SGD ${outstandingReviewed.toLocaleString("en-SG")}</b> reviewed</li><li>${inbox.length?"⚠":"✓"} <b>${inbox.length}</b> need attention</li>`;
+  briefNote.textContent=inbox.length?"Manager review needed":"On track";briefNote.style.background=inbox.length?"#fff8e6":"#ecfdf5";briefNote.style.color=inbox.length?"#9a6700":"#137a50";
+}
+function updateEmployeeState(mode:string):void{employeeMode.textContent=mode;lastUpdated.textContent=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
+function rememberAi(item?:WorkItem):void{if(item){item.aiHtml=aiSummary.innerHTML;item.gatewayText=gatewayStatus.textContent??""}}
+async function createAiSummary(result:WorkflowResult,item?:WorkItem):Promise<void>{
+  if(result.task.state!=="COMPLETED"||!result.summary){aiSummary.textContent="Skipped because deterministic verification did not reach COMPLETED.";gatewayStatus.textContent="AI summary skipped. Business completion remains verification-gated.";rememberAi(item);return}
+  gatewayStatus.textContent="Preparing a manager-readable summary from verified facts…";
+  try{const response=await gateway.chat({messages:[{role:"system",content:"You are Alex, an operations employee. Briefly report only the verified business facts provided. Use concise manager-friendly Markdown. Do not invent amounts, invoices, actions, policies, or completion claims."},{role:"user",content:JSON.stringify({taskState:result.task.state,summary:result.summary,followUps:result.followUps,verification:result.verification})}]});const text=extractAssistantText(response);aiSummary.innerHTML=renderSafeMarkdown(text||"Verified work completed; no additional summary was returned.");gatewayStatus.textContent="Demo Gateway connected · demo-auto · verified facts only";gatewayConnection.textContent="Connected";rememberAi(item)}
+  catch(error){gatewayConnection.textContent="Unavailable";if(error instanceof DemoGatewayRateLimitError)gatewayStatus.textContent=error.message;else if(error instanceof DemoGatewayError&&error.status===403)gatewayStatus.textContent=`Gateway Origin is not enabled for ${window.location.origin}. Verified business work still completed locally.`;else gatewayStatus.textContent=`AI summary unavailable: ${error instanceof Error?error.message:String(error)}`;aiSummary.textContent="Verified business result is available above; AI manager summary is temporarily unavailable.";rememberAi(item)}
+}
+function viewTask(id:string):void{const item=work.find(c=>c.id===id);if(!item?.result)return;setDetailState(item.result.task.state);renderBusinessResult(item.result);renderVerification(item.result);renderActivity(item.result.evidence,item.result.task.state);latestEvidence=JSON.stringify(item.result.evidence,null,2);rawEvidence.textContent=latestEvidence;aiSummary.innerHTML=item.aiHtml??"<p>Summary not cached for this task.</p>";gatewayStatus.textContent=item.gatewayText??"Task summary status unavailable.";document.querySelector("#task-detail")?.scrollIntoView({behavior:"smooth",block:"start"})}
+async function assignTask(task:string):Promise<void>{
+  if(running)return;const cleanTask=task.trim();if(!cleanTask)return;running=true;assignButton.disabled=true;quickTaskButtons.forEach(b=>{b.disabled=true});
+  const customerQuery=deriveCustomerQuery(cleanTask);const item:WorkItem={id:`work-${Date.now()}`,task:cleanTask,customerQuery,context:customerQuery==="ACME"?"ACME Trading Pte Ltd":"Customer review",status:"Running",progress:"Working…"};work.unshift(item);renderWorkQueue();
+  setDetailState("RUNNING");businessMeta.textContent="Alex is working";businessResult.innerHTML='<p class="approval-empty">Alex is resolving the customer and reviewing receivables.</p>';verificationCount.textContent="Waiting for verification";verificationList.innerHTML='<li><span class="check-icon">·</span><div>Verification starts after business capabilities finish.</div></li>';rawEvidence.textContent="";aiSummary.textContent="Waiting for deterministic verification.";gatewayStatus.textContent="Gateway not called until verification passes.";renderActivity([],"RUNNING");updateEmployeeState("Working");
+  try{
+    const result=await runOperationsEmployeeTask("browser",{customerQuery});item.result=result;item.status=result.task.state==="COMPLETED"?"Completed":result.task.state==="NEEDS_REVIEW"?"Needs Review":"Failed";item.progress=result.task.state==="COMPLETED"?"Verified · 4 steps":result.task.state==="NEEDS_REVIEW"?"Manager review required":"Execution stopped";
+    setDetailState(result.task.state);renderBusinessResult(result);renderVerification(result);renderActivity(result.evidence,result.task.state);latestEvidence=JSON.stringify(result.evidence,null,2);rawEvidence.textContent=latestEvidence;
+    if(result.task.state==="COMPLETED"&&result.summary){completedTasks+=1;handledCustomers.add(result.summary.customerId);outstandingReviewed+=result.summary.outstandingTotal}
+    else if(result.task.state==="NEEDS_REVIEW"){inbox.unshift({id:`inbox-${Date.now()}`,title:"Customer identity needs review",detail:`Alex could not verify a unique customer for: ${cleanTask}`})}
+    renderWorkQueue();renderInbox();updateKpis();updateBrief();updateEmployeeState(result.task.state==="COMPLETED"?"Available":result.task.state==="NEEDS_REVIEW"?"Waiting on manager":"Blocked");await createAiSummary(result,item);
+  }catch(error){item.status="Failed";item.progress="Execution stopped";renderWorkQueue();setDetailState("FAILED");businessMeta.textContent="Execution failed";businessResult.innerHTML=`<div class="attention-box">${escapeHtml(error instanceof Error?error.message:String(error))}</div>`;updateEmployeeState("Blocked")}
+  finally{running=false;assignButton.disabled=false;quickTaskButtons.forEach(b=>{b.disabled=false})}
 }
 
-function setPhase(name: PhaseName, state: PhaseState) {
-  const item = phaseItems.find((candidate) => candidate.dataset.phase === name);
-  if (item) item.dataset.state = state;
-}
+form.addEventListener("submit",event=>{event.preventDefault();void assignTask(taskInput.value)});
+quickTaskButtons.forEach(button=>button.addEventListener("click",()=>{taskInput.value=button.dataset.task??"";void assignTask(taskInput.value)}));
+workBody.addEventListener("click",event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>(".view-task");if(button?.dataset.taskId)viewTask(button.dataset.taskId)});
+copyEvidence.addEventListener("click",async()=>{if(!latestEvidence)return;await navigator.clipboard.writeText(latestEvidence);copyEvidence.textContent="Copied";setTimeout(()=>{copyEvidence.textContent="Copy JSON"},1200)});
+document.querySelector("#new-task")?.addEventListener("click",()=>{taskInput.focus();taskInput.select()});
+document.querySelector("#search-task")?.addEventListener("click",()=>{taskInput.focus();taskInput.select()});
+document.querySelector("#open-inbox")?.addEventListener("click",()=>document.querySelector("#inbox")?.scrollIntoView({behavior:"smooth"}));
+document.querySelector("#open-settings")?.addEventListener("click",()=>document.querySelector("#employee-status")?.scrollIntoView({behavior:"smooth"}));
 
-function resetPhases() {
-  for (const item of phaseItems) item.dataset.state = "idle";
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]!));
-}
-
-function inlineMarkdown(value: string): string {
-  return escapeHtml(value)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-}
-
-function renderSafeMarkdown(value: string): string {
-  const lines = value.replace(/\r/g, "").split("\n");
-  const html: string[] = [];
-  let list: "ul" | "ol" | null = null;
-
-  const closeList = () => {
-    if (list) html.push(`</${list}>`);
-    list = null;
-  };
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) {
-      closeList();
-      continue;
-    }
-
-    if (/^#{1,3}\s+/.test(line)) {
-      closeList();
-      html.push(`<h3>${inlineMarkdown(line.replace(/^#{1,3}\s+/, ""))}</h3>`);
-      continue;
-    }
-
-    const unordered = line.match(/^[-*]\s+(.+)$/);
-    if (unordered) {
-      if (list !== "ul") {
-        closeList();
-        list = "ul";
-        html.push("<ul>");
-      }
-      html.push(`<li>${inlineMarkdown(unordered[1]!)}</li>`);
-      continue;
-    }
-
-    const ordered = line.match(/^\d+[.)]\s+(.+)$/);
-    if (ordered) {
-      if (list !== "ol") {
-        closeList();
-        list = "ol";
-        html.push("<ol>");
-      }
-      html.push(`<li>${inlineMarkdown(ordered[1]!)}</li>`);
-      continue;
-    }
-
-    closeList();
-    html.push(`<p>${inlineMarkdown(line)}</p>`);
-  }
-
-  closeList();
-  return html.join("");
-}
-
-function renderSteps(evidence: readonly { type: string }[]) {
-  const steps = evidence.filter((item) => item.type !== "verification");
-  stepCountEl.textContent = `${steps.length} ${steps.length === 1 ? "step" : "steps"}`;
-  stepsEl.innerHTML = steps
-    .map((item, index) => {
-      const label = capabilityLabels[item.type] ?? item.type;
-      return `<li><span class="step-index">${index + 1}</span><div class="step-copy"><span>${escapeHtml(label)}</span><code>${escapeHtml(item.type)}</code></div><span class="step-status">done</span></li>`;
-    })
-    .join("");
-}
-
-function renderVerification(checks: readonly { id: string; passed: boolean; message?: string }[]) {
-  const passed = checks.filter((check) => check.passed).length;
-  verificationCountEl.textContent = `${passed}/${checks.length} passed`;
-  verificationCountEl.dataset.tone = passed === checks.length && checks.length > 0 ? "pass" : "idle";
-  verificationEl.innerHTML = checks
-    .map((check) => `<li data-pass="${check.passed}"><span>${check.passed ? "✓" : "!"}</span><div><strong>${escapeHtml(check.id)}</strong>${check.message ? `<small>${escapeHtml(check.message)}</small>` : ""}</div></li>`)
-    .join("");
-}
-
-function extractAssistantText(body: unknown): string {
-  if (!body || typeof body !== "object") return "";
-  const choices = (body as { choices?: unknown }).choices;
-  if (!Array.isArray(choices)) return "";
-  const first = choices[0] as { message?: { content?: unknown } } | undefined;
-  return typeof first?.message?.content === "string" ? first.message.content : "";
-}
-
-async function runTask(customerQuery: string) {
-  if (running) return;
-  running = true;
-  runButton.disabled = true;
-  for (const button of quickCaseButtons) button.disabled = true;
-  runButton.textContent = "Running…";
-  resetPhases();
-  setPhase("business", "active");
-  setState("RUNNING", "running");
-  summaryEl.innerHTML = "<p class=\"empty-copy\">Resolving customer and reviewing receivables…</p>";
-  stepsEl.innerHTML = "";
-  stepCountEl.textContent = "0 steps";
-  verificationEl.innerHTML = "";
-  verificationCountEl.textContent = "0 checks";
-  verificationCountEl.dataset.tone = "idle";
-  evidenceEl.textContent = "";
-  aiEl.innerHTML = "<p class=\"empty-copy\">Waiting for deterministic verification.</p>";
-  gatewayEl.textContent = "Waiting for verified business result.";
-
-  const result = await runOperationsEmployeeTask("browser", { customerQuery });
-  setPhase("business", "done");
-  setPhase("verify", "active");
-
-  const tone = result.task.state === "COMPLETED" ? "pass" : result.task.state === "NEEDS_REVIEW" ? "warn" : "fail";
-  setState(result.task.state, tone);
-  renderSteps(result.evidence);
-  renderVerification(result.verification.checks);
-  evidenceEl.textContent = JSON.stringify(result.evidence, null, 2);
-  setPhase("verify", "done");
-
-  if (result.summary) {
-    summaryEl.innerHTML = `
-      <div class="summary-grid">
-        <div><span>Customer</span><strong>${escapeHtml(result.summary.customer)}</strong></div>
-        <div><span>Outstanding invoices</span><strong>${result.summary.outstandingInvoices}</strong></div>
-        <div><span>Outstanding total</span><strong>${result.summary.currency} ${result.summary.outstandingTotal.toLocaleString("en-SG")}</strong></div>
-        <div><span>Follow-up actions</span><strong>${result.followUps.length}</strong></div>
-      </div>`;
-  } else {
-    summaryEl.innerHTML = `<p class="empty-copy">${result.task.state === "NEEDS_REVIEW" ? "Customer identity needs review before business actions continue." : "The task could not be completed."}</p>`;
-  }
-
-  if (result.task.state === "COMPLETED" && result.summary) {
-    setPhase("ai", "active");
-    gatewayEl.textContent = "Generating a grounded follow-up summary via demo-auto…";
-    aiEl.innerHTML = "<p class=\"empty-copy\">Summarizing verified facts…</p>";
-    try {
-      const response = await gateway.chat({
-        messages: [
-          {
-            role: "system",
-            content: "You are an operations assistant. Summarize only the verified facts provided. Use concise Markdown with short headings and bullets. Do not invent amounts, invoices, actions, or policies.",
-          },
-          {
-            role: "user",
-            content: JSON.stringify({
-              taskState: result.task.state,
-              summary: result.summary,
-              followUps: result.followUps,
-              verification: result.verification,
-            }),
-          },
-        ],
-      });
-      const text = extractAssistantText(response);
-      aiEl.innerHTML = text ? renderSafeMarkdown(text) : "<p class=\"empty-copy\">Gateway responded, but no assistant text was returned.</p>";
-      gatewayEl.textContent = "Demo Gateway connected · demo-auto · verified facts only";
-      setPhase("ai", "done");
-    } catch (error) {
-      if (error instanceof DemoGatewayRateLimitError) {
-        gatewayEl.textContent = error.message;
-      } else if (error instanceof DemoGatewayError && error.status === 403) {
-        gatewayEl.textContent = `Gateway Origin is not enabled yet for ${window.location.origin}. The verified employee workflow still completed locally.`;
-      } else if (error instanceof TypeError && error.message.includes("Failed to fetch")) {
-        gatewayEl.textContent = `Demo Gateway is not reachable from ${window.location.origin}. The verified employee workflow still completed locally.`;
-      } else {
-        gatewayEl.textContent = `AI summary unavailable: ${error instanceof Error ? error.message : String(error)}`;
-      }
-      aiEl.innerHTML = "<p class=\"empty-copy\">The verified business result remains valid without the optional AI summary.</p>";
-      setPhase("ai", "done");
-    }
-  } else {
-    aiEl.innerHTML = "<p class=\"empty-copy\">Skipped because deterministic verification did not reach COMPLETED.</p>";
-    gatewayEl.textContent = "AI summary skipped because deterministic verification did not reach COMPLETED.";
-  }
-
-  runButton.disabled = false;
-  for (const button of quickCaseButtons) button.disabled = false;
-  runButton.textContent = "Run employee task";
-  running = false;
-}
-
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const query = input.value.trim();
-  if (!query) return;
-  void runTask(query).catch((error) => {
-    setState("FAILED", "fail");
-    summaryEl.innerHTML = `<p class="empty-copy">${escapeHtml(error instanceof Error ? error.message : String(error))}</p>`;
-    gatewayEl.textContent = "Task failed before the optional AI summary.";
-    runButton.disabled = false;
-    for (const button of quickCaseButtons) button.disabled = false;
-    runButton.textContent = "Run employee task";
-    running = false;
-  });
-});
-
-for (const button of quickCaseButtons) {
-  button.addEventListener("click", () => {
-    input.value = button.dataset.query ?? "";
-    void runTask(input.value);
-  });
-}
-
-copyEvidenceButton.addEventListener("click", async () => {
-  if (!evidenceEl.textContent) return;
-  try {
-    await navigator.clipboard.writeText(evidenceEl.textContent);
-    copyEvidenceButton.textContent = "Copied";
-    window.setTimeout(() => { copyEvidenceButton.textContent = "Copy JSON"; }, 1400);
-  } catch {
-    copyEvidenceButton.textContent = "Copy unavailable";
-    window.setTimeout(() => { copyEvidenceButton.textContent = "Copy JSON"; }, 1400);
-  }
-});
-
-void runTask(input.value.trim() || "ACME");
+approvalBadge.textContent="0";renderWorkQueue();renderInbox();updateKpis();updateBrief();void assignTask(taskInput.value);
