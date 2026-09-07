@@ -45,7 +45,7 @@ describe("Digital Employee Dashboard V1 contract", () => {
     expect(main).toContain("Outstanding invoices reviewed");
     expect(main).toContain("Payments reconciled");
     expect(html).toContain("View Evidence");
-    expect(html).toContain("Developer / audit details");
+    expect(html).toContain("Technical trace for audit and debugging.");
     expect(html).toContain('id="copy-evidence"');
   });
 

@@ -19,6 +19,7 @@ const verificationList=document.querySelector<HTMLElement>("#verification-list")
 const verificationCount=document.querySelector<HTMLElement>("#verification-count")!;
 const rawEvidence=document.querySelector<HTMLPreElement>("#raw-evidence")!;
 const copyEvidence=document.querySelector<HTMLButtonElement>("#copy-evidence")!;
+const viewEvidence=document.querySelector<HTMLButtonElement>("#view-evidence")!;
 const aiSummary=document.querySelector<HTMLElement>("#ai-summary")!;
 const gatewayStatus=document.querySelector<HTMLElement>("#gateway-status")!;
 const gatewayConnection=document.querySelector<HTMLElement>("#gateway-connection")!;
@@ -81,7 +82,7 @@ function renderActivity(evidence:readonly{type:string}[],state:string):void{
 }
 function renderVerification(result:WorkflowResult):void{
   const checks=result.verification.checks;const passed=checks.filter(c=>c.passed).length;
-  verificationCount.textContent=`${passed}/${checks.length} checks passed`;
+  verificationCount.textContent=`${passed} / ${checks.length} checks passed`;
   verificationList.innerHTML=checks.map(c=>`<li data-pass="${c.passed}"><span class="check-icon">${c.passed?"✓":"!"}</span><div><strong>${escapeHtml(c.id)}</strong>${c.message?`<div style="color:#6b7280;margin-top:2px">${escapeHtml(c.message)}</div>`:""}</div></li>`).join("");
 }
 function renderBusinessResult(result:WorkflowResult):void{
@@ -129,6 +130,7 @@ form.addEventListener("submit",event=>{event.preventDefault();void assignTask(ta
 quickTaskButtons.forEach(button=>button.addEventListener("click",()=>{taskInput.value=button.dataset.task??"";void assignTask(taskInput.value)}));
 workBody.addEventListener("click",event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>(".view-task");if(button?.dataset.taskId)viewTask(button.dataset.taskId)});
 copyEvidence.addEventListener("click",async()=>{if(!latestEvidence)return;await navigator.clipboard.writeText(latestEvidence);copyEvidence.textContent="Copied";setTimeout(()=>{copyEvidence.textContent="Copy JSON"},1200)});
+viewEvidence.addEventListener("click",()=>{const details=document.querySelector<HTMLDetailsElement>("#evidence-details");if(details){details.open=true;details.scrollIntoView({behavior:"smooth",block:"nearest"})}});
 document.querySelector("#new-task")?.addEventListener("click",()=>{taskInput.focus();taskInput.select()});
 document.querySelector("#search-task")?.addEventListener("click",()=>{taskInput.focus();taskInput.select()});
 document.querySelector("#open-inbox")?.addEventListener("click",()=>document.querySelector("#inbox")?.scrollIntoView({behavior:"smooth"}));
