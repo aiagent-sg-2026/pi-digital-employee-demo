@@ -20,7 +20,7 @@ describe("demo gateway client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [sessionUrl, sessionInit] = fetchMock.mock.calls[0]!;
     expect(sessionUrl).toBe("https://gpt.yapweijun1996.com/demo/session");
-    expect(sessionInit.headers).toMatchObject({ Origin: "https://yapweijun1996.github.io", "Content-Type": "application/json" });
+    expect(sessionInit.headers).toEqual({ "Content-Type": "application/json" });
     expect(JSON.parse(sessionInit.body)).toEqual({ project_id: "github-pages" });
 
     const [chatUrl, chatInit] = fetchMock.mock.calls[1]!;

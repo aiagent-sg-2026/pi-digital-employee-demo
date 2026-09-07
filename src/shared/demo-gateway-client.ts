@@ -1,5 +1,5 @@
 export const DEMO_GATEWAY_BASE_URL = "https://gpt.yapweijun1996.com/demo";
-export const DEMO_GATEWAY_ORIGIN = "https://yapweijun1996.github.io";
+export const DEMO_GATEWAY_ORIGIN = "https://aiagent-sg-2026.github.io";
 export const DEMO_GATEWAY_PROJECT_ID = "github-pages";
 
 export const DEMO_MODELS = [
@@ -77,7 +77,6 @@ export function createDemoGatewayClient(options: DemoGatewayClientOptions = {}):
     const response = await fetchImpl(`${baseUrl}/session`, {
       method: "POST",
       headers: {
-        Origin: origin,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ project_id: projectId }),
@@ -108,7 +107,6 @@ export function createDemoGatewayClient(options: DemoGatewayClientOptions = {}):
     const response = await fetchImpl(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: {
-        Origin: origin,
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
