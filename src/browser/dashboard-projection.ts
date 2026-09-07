@@ -12,6 +12,14 @@ export function countActionableIssues(inbox: readonly BusinessInboxItem[], appro
   for (const approval of approvals) if (approval.state === "pending") identities.add(approvalActionIdentity(approval));
   return identities.size;
 }
+export function taskOutcomeKey(task: BusinessTask): string {
+  if (task.status !== "completed") return ({created:"outcome.ready",running:"outcome.running","needs-review":"outcome.needsReview","needs-approval":"outcome.needsApproval",failed:"outcome.failed",blocked:"outcome.blocked"} as Record<string,string>)[task.status] ?? "outcome.ready";
+  if (task.outcome === "completed-attention-required") return task.intent === "payments.reconcile" || task.intent === "exceptions.review" ? "outcome.investigationAction" : "outcome.completedAction";
+  if (task.outcome === "completed-resolved") return "outcome.completedResolved";
+  if (task.outcome === "completed-no-action") return "outcome.completedNoAction";
+  return "outcome.completed";
+}
+
 export function taskOutcomeLabel(task: BusinessTask): string {
   if (task.status !== "completed") return ({
     created: "Ready", running: "Running", "needs-review": "Needs Review", "needs-approval": "Needs Approval",

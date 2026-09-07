@@ -1,3 +1,4 @@
+import { onLocaleChange, t } from "../i18n";
 export interface PwaVersionInfo { version: string; buildId: string; }
 
 interface BeforeInstallPromptEvent extends Event {
@@ -47,13 +48,13 @@ export async function bootstrapPwa(): Promise<void> {
   if (versionNode) versionNode.textContent = currentLabel;
   if (versionRail) versionRail.textContent = currentLabel;
   if (!import.meta.env.PROD) {
-    if (pwaStatus) pwaStatus.textContent = "PWA active in production build";
-    if (pwaStatusRail) pwaStatusRail.textContent = "Dev preview";
+    if (pwaStatus) pwaStatus.textContent = t("pwa.status.dev");
+    if (pwaStatusRail) pwaStatusRail.textContent = t("pwa.status.devPreview");
     return;
   }
   if (!("serviceWorker" in navigator)) {
-    if (pwaStatus) pwaStatus.textContent = "PWA unsupported";
-    if (pwaStatusRail) pwaStatusRail.textContent = "Unsupported";
+    if (pwaStatus) pwaStatus.textContent = t("pwa.status.unsupported");
+    if (pwaStatusRail) pwaStatusRail.textContent = t("pwa.status.unsupported");
     return;
   }
 
@@ -62,11 +63,12 @@ export async function bootstrapPwa(): Promise<void> {
   let updateAcceptedByUser = false;
   let reloadingForUpdate = false;
 
+  let statusKey = "pwa.status.offlineReady";
   const setPwaStatus = (text: string) => {
     if (pwaStatus) pwaStatus.textContent = text;
     if (pwaStatusRail) pwaStatusRail.textContent = text;
   };
-  const syncNetworkStatus = () => setPwaStatus(navigator.onLine ? "Offline ready" : "Offline · cached");
+  const syncNetworkStatus = () => {statusKey=navigator.onLine?"pwa.status.offlineReady":"pwa.status.offlineCached";setPwaStatus(t(statusKey));};
   window.addEventListener("online", syncNetworkStatus);
   window.addEventListener("offline", syncNetworkStatus);
   if (!navigator.onLine) syncNetworkStatus();
@@ -115,10 +117,10 @@ export async function bootstrapPwa(): Promise<void> {
     checkForUpdate();
   } catch (error) {
     if (navigator.onLine) {
-      setPwaStatus("PWA unavailable");
+      statusKey="pwa.status.unavailable";setPwaStatus(t(statusKey));
       console.error("PWA service worker registration failed", error);
     } else {
-      setPwaStatus("Offline · cached");
+      statusKey="pwa.status.offlineCached";setPwaStatus(t(statusKey));
     }
   }
 
@@ -140,10 +142,17 @@ export async function bootstrapPwa(): Promise<void> {
     if (!waitingWorker) return;
     updateAcceptedByUser = true;
     updateNow.disabled = true;
-    updateNow.textContent = "Updating…";
+    updateNow.textContent = t("pwa.updating");
     waitingWorker.postMessage({ type: "SKIP_WAITING" });
   });
   updateLater?.addEventListener("click", hideUpdate);
+
+  onLocaleChange(()=>{
+    setPwaStatus(t(statusKey));
+    if(updateNow&&!updateNow.disabled)updateNow.textContent=t("pwa.updateNow");
+    if(updateLater)updateLater.textContent=t("pwa.later");
+    if(installButton)installButton.textContent=t("pwa.install");
+  });
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (reloadingForUpdate || !updateAcceptedByUser) return;

@@ -2,11 +2,11 @@ import { BUSINESS_SCHEMA_VERSION, DEMO_SEED_VERSION, demoSeed } from "../demo/se
 import type { BusinessApproval, BusinessEvidence, BusinessInboxItem, BusinessTask, TaskEvent } from "./models";
 
 export const BUSINESS_DB_NAME = "digital-employee-dashboard-v1";
-export const BUSINESS_DB_VERSION = 2;
+export const BUSINESS_DB_VERSION = 3;
 export const LEGACY_LEDGER_STORE = "dashboard-state";
 export const LEGACY_LEDGER_KEY = "ledger";
 export const LEGACY_LOCAL_STORAGE_KEY = "digital-employee-dashboard-v1-ledger";
-export const STORES = {meta:"meta",customers:"customers",invoices:"invoices",payments:"payments",creditNotes:"creditNotes",followUpPolicies:"followUpPolicies",tasks:"tasks",taskEvents:"taskEvents",approvals:"approvals",inbox:"inbox",evidence:"evidence",draftActions:"draftActions"} as const;
+export const STORES = {meta:"meta",customers:"customers",invoices:"invoices",payments:"payments",creditNotes:"creditNotes",followUpPolicies:"followUpPolicies",tasks:"tasks",taskEvents:"taskEvents",approvals:"approvals",inbox:"inbox",evidence:"evidence",draftActions:"draftActions",preferences:"preferences"} as const;
 export type StoreName = typeof STORES[keyof typeof STORES];
 
 function req<T>(request:IDBRequest<T>):Promise<T>{return new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error??new Error("IndexedDB request failed"));});}
@@ -34,4 +34,4 @@ export async function migrateLegacyLedger():Promise<{migrated:boolean;source?:"i
 export async function initializeBusinessWorld():Promise<void>{const db=await openBusinessDatabase();db.close();await seedBusinessData();await migrateLegacyLedger();}
 export async function restoreSampleBusinessData():Promise<void>{await seedBusinessData(true);}
 export async function clearTaskHistory():Promise<void>{for(const store of [STORES.tasks,STORES.taskEvents,STORES.approvals,STORES.evidence,STORES.draftActions] as StoreName[])await clearStore(store);const inbox=await getAllRecords<BusinessInboxItem>(STORES.inbox);for(const item of inbox){if(!item.seeded)await deleteRecord(STORES.inbox,item.id);else if(item.relatedTaskIds?.length)await putRecord(STORES.inbox,{...item,relatedTaskIds:[]});}}
-export async function resetEntireDemo():Promise<void>{for(const store of Object.values(STORES))await clearStore(store);await clearLegacyIndexedLedger();localStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);await seedBusinessData(true);await putRecord(STORES.meta,{id:"legacy-ledger-migration",completedAt:new Date().toISOString(),source:"reset"});}
+export async function resetEntireDemo():Promise<void>{for(const store of Object.values(STORES).filter(store=>store!==STORES.preferences))await clearStore(store);await clearLegacyIndexedLedger();localStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);await seedBusinessData(true);await putRecord(STORES.meta,{id:"legacy-ledger-migration",completedAt:new Date().toISOString(),source:"reset"});}

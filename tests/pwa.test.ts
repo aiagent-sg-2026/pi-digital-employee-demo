@@ -51,7 +51,7 @@ describe("PWA standard contract", () => {
   it("shows current version and supports install UI", () => {
     expect(client).toContain("CURRENT_APP_VERSION");
     expect(client).toContain('beforeinstallprompt');
-    expect(client).toContain('Offline · cached');
+    expect(client).toContain('pwa.status.offlineCached');
     expect(html).toContain('id="app-version"');
     expect(html).toContain('id="pwa-status"');
     expect(html).toContain('id="pwa-install"');

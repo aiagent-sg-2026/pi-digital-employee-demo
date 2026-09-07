@@ -432,3 +432,23 @@ Primary routes:
 Sidebar/mobile navigation uses route-aware active state and `aria-current="page"`. Browser Back/Forward follows the same source of truth. Detail routes hydrate IndexedDB before rendering and never rerun a business task or call the Demo Gateway merely because a URL was refreshed.
 
 Customer actions preserve navigation semantics: **View exceptions** routes to the filtered Inbox and **View related tasks** routes to filtered My Work. Review/prepare actions remain explicit composer suggestions and never auto-run.
+
+## In-app internationalization
+
+The product shell uses one local presentation-locale controller. V1 supports:
+
+- `en` — English default/fallback.
+- `zh-CN` — 简体中文.
+- `zh-TW` — 繁體中文.
+
+The first visit resolves `navigator.languages` to the closest supported locale. A manual selection in **Settings → Language** wins over the browser locale and is persisted in the normalized IndexedDB `preferences` store. Business-world reset actions do not delete this UI preference.
+
+All presentation formatting goes through the same locale source of truth: SGD money, dates, date-times and activity times. This prevents mixed states such as an English interface with a Chinese system-formatted time. `document.documentElement.lang`, route-aware `document.title`, navigation labels, accessibility labels, task outcomes, Inbox status/type/severity, approval presentation, customer labels, history/timeline, verification labels and PWA status/update controls all follow the selected locale.
+
+Business and technical identity is deliberately not translated: customer/company names, customer codes, invoice/payment identifiers, task IDs, issue keys, capability IDs, raw event IDs, verification IDs and machine-readable Evidence remain canonical. Verification IDs are shown only as secondary technical identifiers beside localized human-readable check labels.
+
+The Demo Gateway receives the selected presentation language only after deterministic verification has passed. The system instruction explicitly limits language to presentation and forbids it from changing verification or business truth. Manager summaries are cached as locale-specific evidence (`manager.summary.<locale>`).
+
+Quick actions and guided scenarios populate the composer in the selected language while retaining an internal canonical deterministic route. They still require explicit Assign and never auto-run.
+
+The PWA manifest remains English for V1; installed-app metadata localization is intentionally deferred. In-app i18n is independent of manifest localization.
