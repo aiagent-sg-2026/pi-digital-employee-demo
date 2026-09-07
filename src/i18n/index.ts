@@ -37,8 +37,10 @@ export function applyDomTranslations(root?:ParentNode){
   const elements=(root instanceof Element?[root,...root.querySelectorAll("*")]:[...root.querySelectorAll("*")]) as Element[];
   for(const element of elements){let bindings=attrKeys.get(element);if(!bindings){bindings=new Map();attrKeys.set(element,bindings);}for(const attr of attrs){const current=element.getAttribute(attr);if(!current)continue;let key=bindings.get(attr);if(!key)key=reverseEnglish.get(current);if(key){bindings.set(attr,key);element.setAttribute(attr,t(key));}}}
 }
-const intlLocale=()=>locale==="en"?"en-SG":locale;
-export function formatMoney(value:number,currency="SGD"){return new Intl.NumberFormat(intlLocale(),{style:"currency",currency,currencyDisplay:"code",minimumFractionDigits:0,maximumFractionDigits:2}).format(value);}
+const intlLocaleFor=(target:SupportedLocale)=>target==="en"?"en-SG":target;
+const intlLocale=()=>intlLocaleFor(locale);
+export function formatMoneyFor(target:SupportedLocale,value:number,currency="SGD"){return new Intl.NumberFormat(intlLocaleFor(target),{style:"currency",currency,currencyDisplay:"code",minimumFractionDigits:0,maximumFractionDigits:2}).format(value);}
+export function formatMoney(value:number,currency="SGD"){return formatMoneyFor(locale,value,currency);}
 export function formatDate(value:string|Date){const date=value instanceof Date?value:new Date(value.includes("T")?value:`${value}T00:00:00+08:00`);return new Intl.DateTimeFormat(intlLocale(),{day:"numeric",month:"short",year:"numeric",timeZone:"Asia/Singapore"}).format(date);}
 export function formatDateTime(value:string|Date){return new Intl.DateTimeFormat(intlLocale(),{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:"Asia/Singapore"}).format(value instanceof Date?value:new Date(value));}
 export function formatTime(value:string|Date){return new Intl.DateTimeFormat(intlLocale(),{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Singapore"}).format(value instanceof Date?value:new Date(value));}

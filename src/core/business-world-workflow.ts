@@ -30,6 +30,7 @@ const DAY_MS = 86_400_000;
 const days = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
 const normalizeIssuePart = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unknown";
 export const ambiguousCustomerIssueKey = (query: string) => `ambiguous-customer:${normalizeIssuePart(query)}`;
+export const customerNotFoundIssueKey = (query: string) => `customer-not-found:${normalizeIssuePart(query)}`;
 const verification = (checks: VerificationCheck[]) => ({
   status: (checks.every((check) => check.passed) ? "PASS" : "NEEDS_REVIEW") as "PASS" | "NEEDS_REVIEW",
   checks,
@@ -98,7 +99,7 @@ export async function resolveAmbiguousCustomerReview(business: BusinessRepositor
   await appendMonotonicEvent(work, task.id, "REVIEW_RESOLVED", `Manager selected ${customer.name}`, { customerId: customer.id });
   await work.saveEvidence({ id: `evidence-${task.id}-review-resolved`, taskId: task.id, type: "review.resolved", source: "human-decision", createdAt: resolvedAt, data: { reviewType: "ambiguous-customer", query: task.review.query, selectedCustomerId } });
   const issue = (await work.listInbox()).find((item) => item.issueKey === ambiguousCustomerIssueKey(task.review!.query) && item.status !== "resolved");
-  if (issue) await work.updateInboxStatus(issue.id, "resolved", `Selected ${customer.name}; original task resumed.`);
+  if (issue) await work.updateInboxStatus(issue.id, "resolved", `Selected ${customer.name}; original task resumed.`, { key: "issue.resolution.customerSelected", params: { customer: customer.name } });
   return runBusinessWorldTask(business, work, {
     taskId: task.id,
     title: task.title,
@@ -165,10 +166,12 @@ export async function runBusinessWorldTask(business: BusinessRepository, work: W
         await work.updateTask(task);
         await event("NEEDS_REVIEW", message, { candidateCustomerIds: task.review.candidateCustomerIds });
         await saveEvidence("verification", result);
-        const issueKey = ambiguousCustomerIssueKey(input.customerQuery ?? "");
+        const issueKey = found.canonical.length ? ambiguousCustomerIssueKey(input.customerQuery ?? "") : customerNotFoundIssueKey(input.customerQuery ?? "");
         const issue: BusinessInboxItem = {
           id: `inbox-${issueKey}`,
           issueKey,
+          messageKey: found.canonical.length ? "issue.ambiguousCustomer" : "issue.customerNotFound",
+          messageParams: found.canonical.length ? { customer: input.customerQuery ?? "", count: found.canonical.length } : { customer: input.customerQuery ?? "" },
           type: "ambiguous-customer",
           severity: "warning",
           relatedEntityType: "customer",

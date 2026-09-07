@@ -23,7 +23,26 @@ export async function clearStore(storeName:StoreName):Promise<void>{const db=awa
 export async function deleteRecord(storeName:StoreName,id:string):Promise<void>{const db=await openBusinessDatabase();try{const tx=db.transaction(storeName,"readwrite");tx.objectStore(storeName).delete(id);await done(tx);}finally{db.close();}}
 
 const businessStores:StoreName[]=[STORES.customers,STORES.invoices,STORES.payments,STORES.creditNotes,STORES.followUpPolicies];
-export async function seedBusinessData(force=false):Promise<void>{const current=await getRecord<{id:string;seedVersion?:string}>(STORES.meta,"business-meta");if(!force&&current?.seedVersion===DEMO_SEED_VERSION)return;for(const store of businessStores)await clearStore(store);await putMany(STORES.customers,demoSeed.customers);await putMany(STORES.invoices,demoSeed.invoices);await putMany(STORES.payments,demoSeed.payments);await putMany(STORES.creditNotes,demoSeed.creditNotes);await putMany(STORES.followUpPolicies,demoSeed.followUpPolicies);await putRecord(STORES.meta,{...demoSeed.meta,schemaVersion:BUSINESS_SCHEMA_VERSION,seededAt:new Date().toISOString()});if(force){const existing=await getAllRecords<BusinessInboxItem>(STORES.inbox);for(const item of existing.filter(x=>x.seeded))await deleteRecord(STORES.inbox,item.id);}const ids=new Set((await getAllRecords<BusinessInboxItem>(STORES.inbox)).map(x=>x.id));await putMany(STORES.inbox,demoSeed.inbox.filter(x=>!ids.has(x.id)));}
+async function syncSeedInboxPresentation(force=false):Promise<void>{
+  const existing=await getAllRecords<BusinessInboxItem>(STORES.inbox);
+  if(force){for(const item of existing.filter(item=>item.seeded))await deleteRecord(STORES.inbox,item.id);await putMany(STORES.inbox,demoSeed.inbox);return;}
+  const byId=new Map(existing.map(item=>[item.id,item]));
+  for(const seeded of demoSeed.inbox){
+    const current=byId.get(seeded.id);
+    if(!current){await putRecord(STORES.inbox,seeded);continue;}
+    await putRecord(STORES.inbox,{...current,messageKey:seeded.messageKey,messageParams:seeded.messageParams,seeded:true});
+  }
+}
+
+export async function seedBusinessData(force=false):Promise<void>{
+  const current=await getRecord<{id:string;seedVersion?:string}>(STORES.meta,"business-meta");
+  if(force||current?.seedVersion!==DEMO_SEED_VERSION){
+    for(const store of businessStores)await clearStore(store);
+    await putMany(STORES.customers,demoSeed.customers);await putMany(STORES.invoices,demoSeed.invoices);await putMany(STORES.payments,demoSeed.payments);await putMany(STORES.creditNotes,demoSeed.creditNotes);await putMany(STORES.followUpPolicies,demoSeed.followUpPolicies);
+    await putRecord(STORES.meta,{...demoSeed.meta,schemaVersion:BUSINESS_SCHEMA_VERSION,seededAt:new Date().toISOString()});
+  }
+  await syncSeedInboxPresentation(force);
+}
 
 interface LegacyLedger{version?:number;work?:any[];inbox?:any[];approvals?:any[]}
 async function readLegacyIndexedLedger():Promise<LegacyLedger|undefined>{const db=await openBusinessDatabase();try{if(!db.objectStoreNames.contains(LEGACY_LEDGER_STORE))return undefined;const record=await req(db.transaction(LEGACY_LEDGER_STORE,"readonly").objectStore(LEGACY_LEDGER_STORE).get(LEGACY_LEDGER_KEY)) as {value?:LegacyLedger;payload?:LegacyLedger}|undefined;return record?.value??record?.payload;}finally{db.close();}}

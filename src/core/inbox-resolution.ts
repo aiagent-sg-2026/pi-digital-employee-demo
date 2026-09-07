@@ -35,7 +35,7 @@ export async function suppressDuplicatePaymentLocally(business: BusinessReposito
   if (!payment) throw new Error("Duplicate payment record no longer exists.");
   await business.savePayment({ ...payment, suppressed: true });
   const resolution = "Duplicate payment suppressed in Local Demo Simulation. No external system changed.";
-  await work.updateInboxStatus(issue.id, "resolved", resolution);
+  await work.updateInboxStatus(issue.id, "resolved", resolution,{key:"issue.resolution.duplicateSuppressed"});
   await appendIssueTrace(work, issue, "Duplicate payment issue resolved locally", { action: "duplicate-payment.suppress", paymentId: payment.id, simulation: true });
 }
 
@@ -46,7 +46,7 @@ export async function mapUnmatchedPaymentLocally(business: BusinessRepository, w
   if (!payment || !invoice) throw new Error("Payment or target invoice no longer exists.");
   await business.savePayment({ ...payment, customerId: invoice.customerId, invoiceId: invoice.id, status: "matched" });
   const resolution = `Mapped locally to ${invoice.number}. No external system changed.`;
-  await work.updateInboxStatus(issue.id, "resolved", resolution);
+  await work.updateInboxStatus(issue.id, "resolved", resolution,{key:"issue.resolution.paymentMapped",params:{invoice:invoice.number}});
   await appendIssueTrace(work, issue, "Unmatched payment mapped locally", { action: "unmatched-payment.map", paymentId: payment.id, invoiceId: invoice.id, customerId: invoice.customerId, simulation: true });
 }
 
@@ -54,19 +54,19 @@ export async function dismissUnmatchedPaymentLocally(work: WorkRepository, issue
   const issue = await requireIssue(work, issueId);
   if (issue.type !== "unmatched-payment") throw new Error("Inbox issue is not an unmatched-payment issue.");
   const resolution = "Dismissed from the local demo work queue. Bank/payment source data was not changed.";
-  await work.updateInboxStatus(issue.id, "resolved", resolution);
+  await work.updateInboxStatus(issue.id, "resolved", resolution,{key:"issue.resolution.paymentDismissed"});
   await appendIssueTrace(work, issue, "Unmatched payment dismissed locally", { action: "unmatched-payment.dismiss", simulation: true });
 }
 
 export async function acknowledgeInvoiceDispute(work: WorkRepository, issueId: string): Promise<void> {
   const issue = await requireIssue(work, issueId);
   if (issue.type !== "invoice-dispute") throw new Error("Inbox issue is not an invoice-dispute issue.");
-  await work.updateInboxStatus(issue.id, "investigating", "Dispute acknowledged locally; manager review may still be required.");
+  await work.updateInboxStatus(issue.id, "investigating", "Dispute acknowledged locally; manager review may still be required.",{key:"issue.resolution.disputeAcknowledged"});
 }
 
 export async function escalateInboxIssue(work: WorkRepository, issueId: string): Promise<void> {
   const issue = await requireIssue(work, issueId);
-  await work.updateInboxStatus(issue.id, "escalated", "Escalated for manager review in Local Demo Simulation. No external system changed.");
+  await work.updateInboxStatus(issue.id, "escalated", "Escalated for manager review in Local Demo Simulation. No external system changed.",{key:"issue.resolution.escalated"});
 }
 
 export async function requestManagerApprovalForIssue(
@@ -88,6 +88,6 @@ export async function requestManagerApprovalForIssue(
     snapshotLabel,
     issueKey: issue.issueKey ?? `${issue.type}:${issue.relatedEntityId}`,
   });
-  await work.updateInboxStatus(issue.id, "resolved", `Converted to manager approval ${created.approval.id}. The approval now owns this actionable issue.`);
+  await work.updateInboxStatus(issue.id, "resolved", `Converted to manager approval ${created.approval.id}. The approval now owns this actionable issue.`,{key:"issue.resolution.convertedApproval",params:{approval:created.approval.id}});
   return { taskId: created.task.id, approvalId: created.approval.id };
 }

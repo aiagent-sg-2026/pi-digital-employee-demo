@@ -68,10 +68,13 @@ export interface BusinessFollowUpPolicy {
 
 export type InboxType = "unmatched-payment" | "duplicate-payment" | "invoice-dispute" | "credit-limit" | "ambiguous-customer" | "approval-required";
 export type InboxStatus = "open" | "investigating" | "resolved" | "escalated";
+export type IssueMessageParams = Record<string,string|number>;
 
 export interface BusinessInboxItem {
   id: string;
   issueKey?: string;
+  messageKey?: string;
+  messageParams?: IssueMessageParams;
   type: InboxType;
   severity: "info" | "warning" | "critical";
   relatedEntityType: "customer" | "invoice" | "payment" | "approval";
@@ -82,6 +85,8 @@ export interface BusinessInboxItem {
   title: string;
   detail: string;
   resolution?: string;
+  resolutionKey?: string;
+  resolutionParams?: IssueMessageParams;
   seeded?: boolean;
 }
 
@@ -155,6 +160,8 @@ export interface DraftAction {
 
 export interface BusinessException {
   id: string;
+  messageKey?: string;
+  messageParams?: IssueMessageParams;
   type: InboxType;
   severity: BusinessInboxItem["severity"];
   title: string;

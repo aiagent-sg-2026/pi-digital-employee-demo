@@ -54,7 +54,7 @@ export class IndexedDbBusinessRepository implements BusinessRepository {
   async listPaymentsByCustomer(customerId:string){return (await getAllByIndex<BusinessPayment>(STORES.payments,"customerId",customerId)).filter(p=>!p.duplicateOf);}
   listCreditNotesByCustomer(customerId:string){return getAllByIndex<BusinessCreditNote>(STORES.creditNotes,"customerId",customerId)}
   listPolicies(){return getAllRecords<BusinessFollowUpPolicy>(STORES.followUpPolicies)}
-  async listExceptions(){const items=await getAllRecords<BusinessInboxItem>(STORES.inbox);return items.filter(i=>i.status!=="resolved").map(({id,type,severity,title,detail,relatedEntityType,relatedEntityId})=>({id,type,severity,title,detail,relatedEntityType,relatedEntityId}));}
+  async listExceptions(){const items=await getAllRecords<BusinessInboxItem>(STORES.inbox);return items.filter(i=>i.status!=="resolved").map(({id,messageKey,messageParams,type,severity,title,detail,relatedEntityType,relatedEntityId})=>({id,messageKey,messageParams,type,severity,title,detail,relatedEntityType,relatedEntityId}));}
   async getBusinessSnapshot(){
     const [customers,invoices,payments,credits,exceptions]=await Promise.all([this.listCustomers(),getAllRecords<BusinessInvoice>(STORES.invoices),getAllRecords<BusinessPayment>(STORES.payments),getAllRecords<BusinessCreditNote>(STORES.creditNotes),this.listExceptions()]);
     const canonicalInvoices=invoices.filter(i=>!i.duplicateOf&&i.status!=="paid"&&i.issuedOn<=DEMO_SNAPSHOT_DATE);

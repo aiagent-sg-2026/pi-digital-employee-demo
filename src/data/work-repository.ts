@@ -1,12 +1,12 @@
 import { STORES, getAllByIndex, getAllRecords, getRecord, putRecord } from "./indexeddb";
-import type { BusinessApproval, BusinessEvidence, BusinessInboxItem, BusinessTask, DraftAction, InboxStatus, TaskEvent } from "./models";
+import type { BusinessApproval, BusinessEvidence, BusinessInboxItem, BusinessTask, DraftAction, InboxStatus, IssueMessageParams, TaskEvent } from "./models";
 
 export interface WorkRepository {
   createTask(task:BusinessTask):Promise<void>; updateTask(task:BusinessTask):Promise<void>; getTask(id:string):Promise<BusinessTask|undefined>; listTaskHistory():Promise<BusinessTask[]>;
   appendTaskEvent(event:TaskEvent):Promise<void>; listTaskEvents(taskId:string):Promise<TaskEvent[]>;
   saveEvidence(evidence:BusinessEvidence):Promise<void>; listEvidence(taskId:string):Promise<BusinessEvidence[]>;
   saveApproval(approval:BusinessApproval):Promise<void>; getApproval(id:string):Promise<BusinessApproval|undefined>; listApprovals():Promise<BusinessApproval[]>;
-  saveInboxItem(item:BusinessInboxItem):Promise<void>; upsertInboxIssue(item:BusinessInboxItem):Promise<BusinessInboxItem>; listInbox():Promise<BusinessInboxItem[]>; updateInboxStatus(id:string,status:InboxStatus,resolution?:string):Promise<void>; linkInboxToTask(id:string,taskId:string):Promise<void>;
+  saveInboxItem(item:BusinessInboxItem):Promise<void>; upsertInboxIssue(item:BusinessInboxItem):Promise<BusinessInboxItem>; listInbox():Promise<BusinessInboxItem[]>; updateInboxStatus(id:string,status:InboxStatus,resolution?:string,presentation?:{key:string;params?:IssueMessageParams}):Promise<void>; linkInboxToTask(id:string,taskId:string):Promise<void>;
   saveDraftAction(action:DraftAction):Promise<void>; listDraftActions(taskId:string):Promise<DraftAction[]>;
 }
 export class IndexedDbWorkRepository implements WorkRepository {
@@ -24,7 +24,7 @@ export class IndexedDbWorkRepository implements WorkRepository {
     await putRecord(STORES.inbox,merged);return merged;
   }
   async listInbox(){return (await getAllRecords<BusinessInboxItem>(STORES.inbox)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));}
-  async updateInboxStatus(id:string,status:InboxStatus,resolution?:string){const item=await getRecord<BusinessInboxItem>(STORES.inbox,id);if(!item)return;await putRecord(STORES.inbox,{...item,status,resolution});}
+  async updateInboxStatus(id:string,status:InboxStatus,resolution?:string,presentation?:{key:string;params?:IssueMessageParams}){const item=await getRecord<BusinessInboxItem>(STORES.inbox,id);if(!item)return;await putRecord(STORES.inbox,{...item,status,resolution,resolutionKey:presentation?.key??item.resolutionKey,resolutionParams:presentation?.params??item.resolutionParams});}
   async linkInboxToTask(id:string,taskId:string){const item=await getRecord<BusinessInboxItem>(STORES.inbox,id);if(!item)return;await putRecord(STORES.inbox,{...item,relatedTaskIds:[...new Set([...(item.relatedTaskIds??[]),taskId])]});}
   saveDraftAction(action:DraftAction){return putRecord(STORES.draftActions,action)} listDraftActions(taskId:string){return getAllByIndex<DraftAction>(STORES.draftActions,"taskId",taskId)}
 }
